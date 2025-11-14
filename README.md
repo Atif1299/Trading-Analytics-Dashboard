@@ -1,17 +1,17 @@
-# 📊 Trading Analytics System
+# Trading Analytics System
 
 A professional, full-stack trading analytics platform that syncs with Google Sheets, provides AI-powered insights, and displays beautiful interactive dashboards.
 
-## ✨ Features
+## Features
 
-- 🔄 **Real-time Google Sheets Sync** - Automatically fetch trading data from multiple Google Sheets
-- 🤖 **AI-Powered Chat** - Ask questions in natural language using OpenAI & LangChain
-- 📈 **Interactive Dashboards** - Beautiful charts showing trends, sentiment, and performance
-- 🔍 **Advanced Filtering** - Filter stocks by trend, strength, volatility, sentiment, and ADX
-- 💼 **Professional UI** - Clean, modern interface perfect for business presentations
-- 🚀 **Fast & Simple** - Easy to set up, clean code, fully documented
+- **Real-time Google Sheets Sync** - Automatically fetch trading data from multiple Google Sheets
+- **AI-Powered Chat** - Ask questions in natural language using OpenAI & LangChain
+- **Interactive Dashboards** - Beautiful charts showing trends, sentiment, and performance
+- **Advanced Filtering** - Filter stocks by trend, strength, volatility, sentiment, and ADX
+- **Professional UI** - Clean, modern interface perfect for business presentations
+- **Fast & Simple** - Easy to set up, clean code, fully documented
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 Frontend (React + Vite + Tailwind CSS)
@@ -21,7 +21,7 @@ Backend (Python + FastAPI + LangChain)
     Google Sheets (Your n8n Data)
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Python 3.8+** installed
 - **Node.js 18+** and npm installed
@@ -29,7 +29,7 @@ Backend (Python + FastAPI + LangChain)
 - **Google Cloud Project** with Sheets API enabled
 - **Google Service Account** credentials JSON file
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1️⃣ Backend Setup
 
@@ -138,7 +138,7 @@ npm run dev
 
 The app will open at: **http://localhost:5173**
 
-## 📖 Usage Guide
+## Usage Guide
 
 ### Initial Setup
 
@@ -199,7 +199,7 @@ self.llm = ChatOpenAI(
 )
 ```
 
-## 🎨 Customization
+## Customization
 
 ### Colors & Branding
 
@@ -224,7 +224,7 @@ theme: {
 
 Charts are in `frontend/src/components/Dashboard.jsx` using Recharts library.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Trading System/
@@ -259,7 +259,7 @@ Trading System/
 └── README.md                   # This file
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Backend Issues
 
@@ -308,7 +308,7 @@ pip install -r requirements.txt
 npm install
 ```
 
-## 🚢 Deployment
+## Deployment
 
 ### Backend (Railway/Render/Heroku)
 
@@ -329,7 +329,7 @@ npm install
 2. Deploy the `dist` folder to Vercel/Netlify
 3. Set environment variable: `VITE_API_URL=https://your-backend-url.com`
 
-## 📚 API Documentation
+## API Documentation
 
 Once the backend is running, visit:
 - **Swagger UI**: http://localhost:8000/docs
@@ -343,14 +343,14 @@ Once the backend is running, visit:
 - `POST /api/chat` - Chat with AI
 - `GET /api/insights` - Get quick insights
 
-## 🤝 Support
+## Support
 
 For questions or issues:
 1. Check the troubleshooting section above
 2. Review the code comments (everything is well-documented)
 3. Inspect browser console and backend logs for errors
 
-## 📝 Notes for Your UK Client
+## Notes for Your UK Client
 
 - ✅ **Professional Design** - Clean, modern UI suitable for business presentations
 - ✅ **Easy to Use** - Intuitive interface, no technical knowledge required
@@ -373,4 +373,4 @@ cd frontend
 npm run dev
 ```
 
-Then visit: **http://localhost:5173** 🚀
+Then visit: **http://localhost:5173** 
