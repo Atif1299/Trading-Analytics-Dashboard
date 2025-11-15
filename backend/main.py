@@ -59,9 +59,14 @@ async def startup_event():
     creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
     credentials_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
     
-    if creds_json or os.path.exists(credentials_file):
+    if creds_json:
+        # Cloud Run: env variable contains JSON
+        sheets_sync = GoogleSheetsSync(credentials_file=None)
+        print("✅ Google Sheets service initialized (using GOOGLE_CREDENTIALS_JSON)")
+    elif os.path.exists(credentials_file):
+        # Local: use credentials file
         sheets_sync = GoogleSheetsSync(credentials_file)
-        print("✅ Google Sheets service initialized")
+        print("✅ Google Sheets service initialized (using credentials file)")
     else:
         print("⚠️ Google credentials not found. Set GOOGLE_CREDENTIALS_JSON env var or add credentials.json")
     
