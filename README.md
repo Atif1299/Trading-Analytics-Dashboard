@@ -1,376 +1,323 @@
-# Trading Analytics System
+# 📊 Trading Analytics Dashboard
 
-A professional, full-stack trading analytics platform that syncs with Google Sheets, provides AI-powered insights, and displays beautiful interactive dashboards.
+A professional trading analytics platform that syncs with Google Sheets, provides AI-powered insights, and displays beautiful interactive dashboards.
 
-## Features
+> **Perfect for**: Demo presentations, client showcases, n8n automation integration
 
-- **Real-time Google Sheets Sync** - Automatically fetch trading data from multiple Google Sheets
-- **AI-Powered Chat** - Ask questions in natural language using OpenAI & LangChain
-- **Interactive Dashboards** - Beautiful charts showing trends, sentiment, and performance
-- **Advanced Filtering** - Filter stocks by trend, strength, volatility, sentiment, and ADX
-- **Professional UI** - Clean, modern interface perfect for business presentations
-- **Fast & Simple** - Easy to set up, clean code, fully documented
+## ✨ Features
 
-## Architecture
+- 🔄 **Real-time Google Sheets Sync** - Fetch trading data automatically
+- 🤖 **AI Chat Assistant** - Ask questions in natural language (OpenAI + LangChain)
+- 📈 **Interactive Dashboards** - Beautiful charts with trends, sentiment, and performance
+- 🎯 **Advanced Filtering** - Filter by trend, strength, volatility, sentiment, ADX
+- 🎨 **Professional UI** - Clean interface built with React + Tailwind CSS
+- ☁️ **Cloud-Ready** - Deploy to Google Cloud Run in minutes
+
+## 🏗️ Architecture
 
 ```
-Frontend (React + Vite + Tailwind CSS)
+Frontend (React + Vite + Tailwind)
          ↕️ REST API
-Backend (Python + FastAPI + LangChain)
+Backend (Python FastAPI + LangChain)
          ↕️ Google Sheets API
-    Google Sheets (Your n8n Data)
+    Google Sheets (n8n writes here)
 ```
 
-## Prerequisites
+**Extensible Design**: 
+- Add n8n webhooks without code changes
+- Modify data structure easily
+- Swap data sources (Sheets → Database)
+- Add new analytics calculations
 
-- **Python 3.8+** installed
-- **Node.js 18+** and npm installed
-- **OpenAI API Key** ([Get one here](https://platform.openai.com/api-keys))
-- **Google Cloud Project** with Sheets API enabled
-- **Google Service Account** credentials JSON file
+---
 
-## Quick Start
+## 🚀 Quick Start (Local Development)
 
-### 1️⃣ Backend Setup
+### Prerequisites
 
-#### Step 1: Install Python Dependencies
+- Python 3.11+ and Node.js 18+
+- OpenAI API Key: https://platform.openai.com/api-keys
+- Google Service Account with Sheets API enabled
+- Google Sheet shared with service account
 
-```cmd
+### 1. Clone & Setup
+
+```bash
+# Install backend dependencies
 cd backend
 pip install -r requirements.txt
-```
 
-#### Step 2: Set Up Google Sheets API
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable **Google Sheets API**:
-   - Go to "APIs & Services" → "Library"
-   - Search for "Google Sheets API"
-   - Click "Enable"
-
-4. Create Service Account:
-   - Go to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "Service Account"
-   - Fill in name and click "Create"
-   - Skip optional steps and click "Done"
-
-5. Download Credentials:
-   - Click on the service account you created
-   - Go to "Keys" tab
-   - Click "Add Key" → "Create New Key"
-   - Select "JSON" and click "Create"
-   - Save the downloaded file as `credentials.json` in the `backend` folder
-
-6. Share your Google Sheet with the service account email (found in credentials.json)
-
-#### Step 3: Configure Environment Variables
-
-Create a `.env` file in the `backend` folder:
-
-```cmd
-copy .env.example .env
-```
-
-Edit `.env` and add your credentials:
-
-```env
-# Your OpenAI API Key
-OPENAI_API_KEY=sk-your-openai-api-key-here
-
-# Your Google Sheet IDs (comma-separated for multiple sheets)
-# Get the ID from the URL: https://docs.google.com/spreadsheets/d/SHEET_ID_HERE/edit
-GOOGLE_SHEET_IDS=your_sheet_id_here
-
-# Path to your credentials file
-GOOGLE_CREDENTIALS_FILE=credentials.json
-
-# Server settings (default values are fine)
-PORT=8000
-HOST=0.0.0.0
-FRONTEND_URL=http://localhost:5173
-```
-
-#### Step 4: Start the Backend Server
-
-```cmd
-python main.py
-```
-
-You should see:
-```
-✅ Successfully authenticated with Google Sheets
-✅ AI Chat service initialized
-✨ Server ready!
-🚀 Starting server on 0.0.0.0:8000
-```
-
-### 2️⃣ Frontend Setup
-
-Open a **new terminal** window:
-
-#### Step 1: Install Dependencies
-
-```cmd
-cd frontend
+# Install frontend dependencies  
+cd ../frontend
 npm install
 ```
 
-#### Step 2: Configure Environment
+### 2. Get API Keys
 
-Create `.env` file:
+**OpenAI API Key:**
+1. Go to https://platform.openai.com/api-keys
+2. Create new secret key
+3. Copy it (starts with `sk-`)
 
-```cmd
-copy .env.example .env
-```
+**Google Service Account:**
+1. Go to https://console.cloud.google.com/
+2. Create project → Enable "Google Sheets API"
+3. Create Service Account → Download JSON credentials
+4. Save as `backend/credentials.json`
+5. Copy service account email from JSON file
+6. Share your Google Sheet with this email (Viewer access)
 
-The default configuration should work:
+### 3. Configure
+
+Create `backend/.env`:
 
 ```env
-VITE_API_URL=http://localhost:8000
+OPENAI_API_KEY=sk-your-openai-key-here
+GOOGLE_SHEET_IDS=your_sheet_id_from_url
+GOOGLE_SHEET_GID=1186874097  # Optional: specific worksheet GID
+GOOGLE_CREDENTIALS_FILE=credentials.json
+PORT=8000
+FRONTEND_URL=http://localhost:5173
 ```
 
-#### Step 3: Start the Frontend
+### 4. Run
 
-```cmd
+```bash
+# Terminal 1: Backend
+cd backend
+python main.py
+
+# Terminal 2: Frontend
+cd frontend
 npm run dev
 ```
 
-The app will open at: **http://localhost:5173**
+Open **http://localhost:5173** 🎉
 
-## Usage Guide
+---
 
-### Initial Setup
-
-1. **Start both servers** (backend and frontend)
-2. **Click "Sync Data"** button in the top-right corner
-3. Wait for data to sync from your Google Sheet
-4. Explore the dashboard! 🎉
+## 📖 Usage
 
 ### Dashboard Tab
-
-- View **market overview** with key metrics
-- See **trend distribution** pie chart
-- Analyze **top performers** by ADX
-- Get **AI-generated insights** about the market
+- View analytics summary
+- See trend distribution charts
+- Check top performers by ADX
+- Read AI-generated insights
 
 ### Stocks Tab
-
-- **Filter stocks** by multiple criteria:
-  - Trend (uptrend/downtrend)
-  - Trend strength (strong/developing/weak)
-  - Volatility (high/moderate/low)
-  - Minimum sentiment score
-  - Minimum ADX value
-- View detailed **stock cards** with all metrics
-- See sentiment analysis and rationale
+- Browse all stocks from Google Sheets
+- Filter by trend, strength, volatility
+- Filter by sentiment score and ADX
+- View detailed stock cards
 
 ### AI Chat Tab
+- Ask: "Which stocks have strong uptrends?"
+- Ask: "Show me high volatility stocks"
+- Ask: "What's the average sentiment?"
+- Natural language interface powered by OpenAI
 
-- Ask questions in natural language:
-  - "Show me strong uptrend stocks"
-  - "What's the average sentiment?"
-  - "List high volatility stocks"
-  - "Which stocks have sentiment above 0.5?"
-- Get instant AI-powered responses
-- View relevant stock data automatically
+---
 
 ## 🔧 Configuration
 
 ### Multiple Google Sheets
 
-To work with multiple sheets, add all sheet IDs to `.env`:
-
 ```env
 GOOGLE_SHEET_IDS=sheet_id_1,sheet_id_2,sheet_id_3
 ```
 
-The system will automatically combine data from all sheets.
+### Specific Worksheet (by GID)
 
-### Changing the OpenAI Model
+Get GID from URL: `...#gid=1186874097`
+
+```env
+GOOGLE_SHEET_GID=1186874097
+```
+
+### Change AI Model
 
 Edit `backend/services/ai_chat.py`:
 
 ```python
 self.llm = ChatOpenAI(
-    api_key=openai_api_key,
-    model="gpt-4",  # Change to "gpt-4", "gpt-3.5-turbo", etc.
+    model="gpt-4o-mini",  # or "gpt-4", "gpt-4o"
     temperature=0.3
 )
 ```
 
-## Customization
+---
 
-### Colors & Branding
+## 🚀 Cloud Deployment
 
-Edit `frontend/tailwind.config.js` to change the color scheme:
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete Google Cloud Run deployment guide.
 
-```javascript
-theme: {
-  extend: {
-    colors: {
-      primary: {
-        // Change these values to your brand colors
-        500: '#0ea5e9',
-        600: '#0284c7',
-        // ...
-      },
-    },
-  },
-}
+**Quick deploy:**
+```bash
+gcloud run deploy trading-analytics-dashboard \
+  --source . \
+  --region europe-west2 \
+  --allow-unauthenticated
 ```
 
-### Chart Styles
+---
 
-Charts are in `frontend/src/components/Dashboard.jsx` using Recharts library.
-
-## Project Structure
+## 📁 Project Structure
 
 ```
-Trading System/
 ├── backend/
-│   ├── main.py                 # FastAPI server & API routes
-│   ├── models.py               # Data models (Pydantic)
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env                    # Environment variables (create this)
-│   ├── credentials.json        # Google credentials (add this)
+│   ├── main.py              # FastAPI app & endpoints
+│   ├── models.py            # Data models (Pydantic)
+│   ├── requirements.txt     # Python dependencies
+│   ├── credentials.json     # Google credentials (gitignored)
 │   └── services/
-│       ├── sheets_sync.py      # Google Sheets integration
-│       ├── ai_chat.py          # LangChain + OpenAI chat
-│       └── analytics.py        # Data processing & analytics
+│       ├── sheets_sync.py   # Google Sheets integration
+│       ├── analytics.py     # Data analysis & filtering
+│       └── ai_chat.py       # LangChain + OpenAI chat
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx             # Main application component
-│   │   ├── main.jsx            # React entry point
-│   │   ├── index.css           # Global styles (Tailwind)
-│   │   ├── components/
-│   │   │   ├── Dashboard.jsx   # Analytics dashboard
-│   │   │   ├── ChatInterface.jsx # AI chat component
-│   │   │   ├── Filters.jsx     # Filtering controls
-│   │   │   └── StockCard.jsx   # Individual stock display
+│   │   ├── App.jsx          # Main app component
+│   │   ├── components/      # React components
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── StockCard.jsx
+│   │   │   ├── Filters.jsx
+│   │   │   └── ChatInterface.jsx
 │   │   └── services/
-│   │       └── api.js          # API service (axios)
-│   ├── index.html
+│   │       └── api.js       # API client
 │   ├── package.json
-│   ├── vite.config.js
-│   └── tailwind.config.js
+│   └── vite.config.js
 │
-└── README.md                   # This file
+├── Dockerfile               # Multi-stage Docker build
+├── cloudbuild.yaml         # Auto-deploy on git push
+└── .dockerignore
 ```
 
-## Troubleshooting
+---
 
-### Backend Issues
+## 🔌 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sync` | POST | Sync data from Google Sheets |
+| `/api/stocks` | GET | Get all stocks (with filters) |
+| `/api/analytics` | GET | Get analytics summary |
+| `/api/chat` | POST | Chat with AI about data |
+| `/api/insights` | GET | Get AI-generated insights |
+| `/api/sync-status` | GET | Check sync status |
+
+**Full API docs**: http://localhost:8000/docs (auto-generated)
+
+---
+
+## 🛠️ Extending the System
+
+### Adding New Data Fields
+
+1. Update Google Sheet columns
+2. Add field to `backend/models.py`:
+```python
+class StockData(BaseModel):
+    rsi: Optional[float] = None  # Add this
+```
+3. Frontend automatically displays new fields
+
+### Adding New Analytics
+
+Create new method in `backend/services/analytics.py`:
+```python
+@staticmethod
+def calculate_risk_score(data: List[Dict]) -> Dict:
+    # Your logic here
+    pass
+```
+
+### n8n Integration
+
+**Option 1**: n8n writes to Google Sheets (no code changes!)
+
+**Option 2**: Add webhook endpoint:
+```python
+@app.post("/api/webhook/n8n")
+async def receive_n8n_data(data: dict):
+    global stock_data_cache
+    stock_data_cache[data['sheet_id']] = data['stocks']
+    return {"status": "success"}
+```
+
+---
+
+## 🐛 Troubleshooting
 
 **"Authentication failed"**
-- Make sure `credentials.json` is in the `backend` folder
-- Verify you've enabled Google Sheets API in Google Cloud Console
-- Check that the service account email has access to your sheet
-
-**"OpenAI API key not found"**
-- Ensure you've set `OPENAI_API_KEY` in `.env`
-- Verify the API key is valid at https://platform.openai.com/
+- Check service account has Sheet access
+- Verify credentials.json is in backend folder
 
 **"No data available"**
-- Click the "Sync Data" button to fetch data from Google Sheets
-- Check that `GOOGLE_SHEET_IDS` is set correctly in `.env`
-- Verify the sheet format matches the expected columns
+- Click "Sync Data" button first
+- Check Google Sheet ID in .env
+- Verify Sheet is shared with service account
 
-### Frontend Issues
+**"Connection refused"**
+- Backend running? Check terminal
+- Correct ports? (Backend:8000, Frontend:5173)
 
-**"Failed to fetch"**
-- Make sure the backend server is running (python main.py)
-- Check that `VITE_API_URL` in frontend `.env` points to the correct backend URL
-- Look for CORS errors in browser console
-
-**Charts not displaying**
-- Ensure data has been synced successfully
-- Check browser console for any errors
-
-### Common Errors
-
-**Port already in use**
-```cmd
-# Backend (change PORT in .env)
-PORT=8001
-
-# Frontend (change port in vite.config.js)
-server: { port: 5174 }
+**"Module not found"**
+```bash
+cd backend && pip install -r requirements.txt
+cd frontend && npm install
 ```
 
-**Module not found**
-```cmd
-# Backend
-pip install -r requirements.txt
+---
 
-# Frontend
-npm install
+## 📊 Data Format
+
+Expected Google Sheet columns:
+```
+Symbol, Timeframe, EMA50, EMA200, ATR, Price, atrPercentage, 
+ADX, Trend, Trend_strength, Volatility, qualifiedFilter, 
+Date, Stock, sentimentScore, Rational
 ```
 
-## Deployment
+**Column names are flexible** - the system handles variations (case-insensitive).
 
-### Backend (Railway/Render/Heroku)
+---
 
-1. Create a new project
-2. Connect your GitHub repository
-3. Set environment variables in the dashboard
-4. Add `credentials.json` as a secret file
-5. Deploy!
+## 🎯 Tech Stack
 
-### Frontend (Vercel/Netlify)
+**Backend:**
+- FastAPI - Modern Python web framework
+- LangChain - AI orchestration
+- OpenAI GPT-4o-mini - Natural language processing
+- gspread - Google Sheets API
+- Pandas - Data analysis
 
-1. Build the frontend:
-   ```cmd
-   cd frontend
-   npm run build
-   ```
+**Frontend:**
+- React 18 - UI library
+- Vite - Build tool & dev server
+- Tailwind CSS - Styling
+- Recharts - Data visualization
+- Axios - API client
 
-2. Deploy the `dist` folder to Vercel/Netlify
-3. Set environment variable: `VITE_API_URL=https://your-backend-url.com`
+**Deployment:**
+- Docker - Containerization
+- Cloud Run - Serverless hosting
+- Cloud Build - CI/CD pipeline
 
-## API Documentation
+---
 
-Once the backend is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+## 📝 License
 
-### Key Endpoints
+MIT License - feel free to modify and use for your projects.
 
-- `POST /api/sync` - Sync data from Google Sheets
-- `GET /api/stocks` - Get stocks with filters
-- `GET /api/analytics` - Get analytics summary
-- `POST /api/chat` - Chat with AI
-- `GET /api/insights` - Get quick insights
+---
 
-## Support
+## 🆘 Need Help?
 
-For questions or issues:
-1. Check the troubleshooting section above
-2. Review the code comments (everything is well-documented)
-3. Inspect browser console and backend logs for errors
+1. Check `DEPLOYMENT.md` for cloud deployment
+2. View API docs: http://localhost:8000/docs
+3. Check browser console (F12) for frontend errors
+4. Check terminal for backend errors
 
-## Notes for Your UK Client
+---
 
-- ✅ **Professional Design** - Clean, modern UI suitable for business presentations
-- ✅ **Easy to Use** - Intuitive interface, no technical knowledge required
-- ✅ **Scalable** - Supports multiple Google Sheets, thousands of stocks
-- ✅ **AI-Powered** - Natural language queries make data analysis effortless
-- ✅ **Real-time** - Data syncs on-demand, always up-to-date
-- ✅ **Secure** - No data stored permanently, all processing in real-time
-
-## 🎉 You're All Set!
-
-Start the servers and begin analyzing your trading data with AI-powered insights!
-
-```cmd
-# Terminal 1 - Backend
-cd backend
-python main.py
-
-# Terminal 2 - Frontend  
-cd frontend
-npm run dev
-```
-
-Then visit: **http://localhost:5173** 
+**Built with ❤️ for trading analytics and AI-powered insights**

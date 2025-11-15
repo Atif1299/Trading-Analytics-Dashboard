@@ -41,7 +41,7 @@ class AnalyticsService:
         else:
             uptrend = 0
             downtrend = 0
-        
+
         # Calculate average sentiment (handle missing values)
         sentiment_col = 'sentimentScore' if 'sentimentScore' in df.columns else 'sentiment_score' if 'sentiment_score' in df.columns else None
         if sentiment_col:
