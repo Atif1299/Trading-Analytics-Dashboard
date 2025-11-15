@@ -55,12 +55,15 @@ async def startup_event():
     print("🚀 Starting Trading Analytics API...")
     
     # Initialize Google Sheets
+    # Check for Cloud Run env variable first, then local file
+    creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
     credentials_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
-    if os.path.exists(credentials_file):
+    
+    if creds_json or os.path.exists(credentials_file):
         sheets_sync = GoogleSheetsSync(credentials_file)
         print("✅ Google Sheets service initialized")
     else:
-        print("⚠️ Google credentials file not found. Please add credentials.json")
+        print("⚠️ Google credentials not found. Set GOOGLE_CREDENTIALS_JSON env var or add credentials.json")
     
     # Initialize AI Chat
     openai_key = os.getenv("OPENAI_API_KEY")
