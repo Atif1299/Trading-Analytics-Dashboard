@@ -1,0 +1,32 @@
+# Cloud Build configuration for automatic deployment
+# This file enables auto-deployment when you push to GitHub
+
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/trading-analytics:$COMMIT_SHA', '.']
+  
+  # Push the image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/trading-analytics:$COMMIT_SHA']
+  
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'trading-analytics'
+      - '--image=gcr.io/$PROJECT_ID/trading-analytics:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=OPENAI_API_KEY=$$OPENAI_API_KEY,GOOGLE_SHEET_IDS=$$GOOGLE_SHEET_IDS,GOOGLE_SHEET_GID=$$GOOGLE_SHEET_GID'
+      - '--set-secrets=credentials.json=google-credentials:latest'
+
+# Store images in Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/trading-analytics:$COMMIT_SHA'
+
+# Build timeout
+timeout: '1200s'

@@ -1,0 +1,27 @@
+# This file specifies files that will not be uploaded to Google Cloud
+# Similar to .dockerignore but for gcloud CLI
+
+.gcloudignore
+.git
+.gitignore
+
+node_modules/
+__pycache__/
+*.pyc
+
+.env
+.env.local
+credentials.json
+
+frontend/node_modules/
+frontend/dist/
+
+*.md
+!README.md
+
+.vscode/
+.idea/
+
+*.bat
+setup.bat
+start.bat

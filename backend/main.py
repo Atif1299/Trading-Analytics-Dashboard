@@ -4,10 +4,13 @@ Trading Analytics System API
 """
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import os
 from typing import Optional, List
 from datetime import datetime
+from pathlib import Path
 
 # Import our services
 from services.sheets_sync import GoogleSheetsSync, to_dataframe
@@ -70,9 +73,23 @@ async def startup_event():
     print("✨ Server ready!")
 
 
+# Mount static files (for production/Cloud Run)
+# This serves the React frontend build
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    print("✅ Serving frontend static files")
+
+
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Health check endpoint or serve frontend"""
+    # If static frontend exists, serve it
+    index_file = Path(__file__).parent / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    
+    # Otherwise return API info (for development)
     return {
         "status": "running",
         "message": "Trading Analytics API is live! 🚀",
