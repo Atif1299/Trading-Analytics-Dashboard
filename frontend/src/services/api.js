@@ -4,7 +4,10 @@
  */
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// In production (Cloud Run), use relative URL since frontend and backend are on same domain
+// In development, use localhost:8000
+const API_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:8000' : '');
 
 const api = axios.create({
   baseURL: API_URL,
