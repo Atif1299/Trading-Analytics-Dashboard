@@ -7,13 +7,14 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from typing import List, Dict
 import os
+import json
 from datetime import datetime
 
 
 class GoogleSheetsSync:
     """Handles all Google Sheets operations - super simple!"""
     
-    def __init__(self, credentials_file: str):
+    def __init__(self, credentials_file: str = None):
         """Initialize with Google credentials"""
         self.credentials_file = credentials_file
         self.client = None
@@ -29,11 +30,21 @@ class GoogleSheetsSync:
                 'https://www.googleapis.com/auth/drive.readonly'
             ]
             
-            # Load credentials
-            creds = Credentials.from_service_account_file(
-                self.credentials_file, 
-                scopes=scopes
-            )
+            # Check if credentials provided as JSON string (Cloud Run)
+            creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+            if creds_json:
+                # Load from environment variable
+                creds_dict = json.loads(creds_json)
+                creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+            elif self.credentials_file and os.path.exists(self.credentials_file):
+                # Load from file (local development)
+                creds = Credentials.from_service_account_file(
+                    self.credentials_file, 
+                    scopes=scopes
+                )
+            else:
+                raise Exception("No credentials found. Set GOOGLE_CREDENTIALS_JSON or provide credentials file.")
+            
             self.client = gspread.authorize(creds)
             print("✅ Successfully authenticated with Google Sheets")
             
