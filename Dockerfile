@@ -39,8 +39,7 @@ COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist ./static
 
 # Expose port (Cloud Run uses PORT env variable)
-ENV PORT=8080
 EXPOSE 8080
 
-# Run FastAPI with uvicorn
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Run FastAPI with uvicorn - use PORT env variable
+CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
