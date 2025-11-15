@@ -16,13 +16,13 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'trading-analytics'
+      - 'trading-analytics-dashboard'
       - '--image=gcr.io/$PROJECT_ID/trading-analytics:$COMMIT_SHA'
-      - '--region=us-central1'
+      - '--region=europe-west2'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=OPENAI_API_KEY=$$OPENAI_API_KEY,GOOGLE_SHEET_IDS=$$GOOGLE_SHEET_IDS,GOOGLE_SHEET_GID=$$GOOGLE_SHEET_GID'
-      - '--set-secrets=credentials.json=google-credentials:latest'
+      # Note: Environment variables are already configured in Cloud Run console
+      # No need to set them here to avoid overwriting
 
 # Store images in Container Registry
 images:
