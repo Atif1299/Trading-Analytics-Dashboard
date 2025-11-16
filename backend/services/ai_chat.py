@@ -148,61 +148,106 @@ Keep responses concise and professional."""
     
     def _extract_relevant_stocks(self, query: str, df: pd.DataFrame) -> List[Dict]:
         """
-        Try to extract stocks relevant to the query
-        Simple keyword matching approach
+        Extract stocks relevant to the query using expanded keyword matching
         """
         try:
             query_lower = query.lower()
+            filtered_df = df.copy()
+            filter_applied = False
             
-            # Keywords that suggest filtering
+            # Expanded keyword mapping for better matching
             filter_keywords = {
-                'uptrend': ('Trend', 'uptrend'),
-                'downtrend': ('Trend', 'downtrend'),
-                'strong': ('Trend_strength', 'Strong'),
-                'high volatility': ('Volatility', 'High'),
-                'positive sentiment': ('sentimentScore', lambda x: x > 0),
+                # Uptrend synonyms
+                ('uptrend', 'bullish', 'rising', 'up trend', 'going up', 'increasing'): ('Trend', 'uptrend'),
+                # Downtrend synonyms
+                ('downtrend', 'bearish', 'falling', 'down trend', 'going down', 'decreasing'): ('Trend', 'downtrend'),
+                # Strong trend synonyms
+                ('strong', 'powerful', 'strongest', 'high strength'): ('Trend_strength', 'strong'),
+                # High volatility synonyms
+                ('high volatility', 'volatile', 'high vol', 'unstable'): ('Volatility', 'high'),
+                # Moderate volatility
+                ('moderate volatility', 'medium volatility', 'moderate vol'): ('Volatility', 'moderate'),
+                # Low volatility
+                ('low volatility', 'stable', 'low vol'): ('Volatility', 'low'),
+                # Positive sentiment
+                ('positive sentiment', 'good sentiment', 'bullish sentiment', 'optimistic'): ('sentimentScore', lambda x: x > 0),
+                # Negative sentiment
+                ('negative sentiment', 'bad sentiment', 'bearish sentiment', 'pessimistic'): ('sentimentScore', lambda x: x < 0),
             }
             
-            # Check if query matches any filter keywords
-            for keyword, (column, value) in filter_keywords.items():
-                if keyword in query_lower:
+            # Apply filters based on keyword matches
+            for keywords, (column, value) in filter_keywords.items():
+                if any(keyword in query_lower for keyword in keywords):
                     # Find the actual column name (handle case variations)
                     col_name = None
-                    for col in df.columns:
-                        if col.lower() == column.lower():
+                    for col in filtered_df.columns:
+                        if col.lower().replace('_', '').replace(' ', '') == column.lower().replace('_', '').replace(' ', ''):
                             col_name = col
                             break
                     
                     if col_name:
                         if callable(value):
-                            # Handle lambda functions
-                            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
-                            filtered = df[df[col_name].apply(value)]
+                            # Handle lambda functions for numeric comparisons
+                            filtered_df[col_name] = pd.to_numeric(filtered_df[col_name], errors='coerce')
+                            filtered_df = filtered_df[filtered_df[col_name].apply(value)]
                         else:
-                            # Simple string matching
-                            filtered = df[df[col_name].astype(str).str.contains(value, case=False, na=False)]
-                        
-                        if not filtered.empty:
-                            return filtered.head(10).to_dict('records')
+                            # String matching (case insensitive)
+                            filtered_df = filtered_df[filtered_df[col_name].astype(str).str.lower().str.contains(value.lower(), na=False)]
+                        filter_applied = True
             
-            # If no specific filter, return top stocks
-            if any(word in query_lower for word in ['top', 'best', 'strongest']):
-                adx_col = None
-                for col in df.columns:
-                    if col.lower().replace(' ', '') == 'adx':
-                        adx_col = col
-                        break
-                
+            # Handle ADX-related queries
+            if any(word in query_lower for word in ['high adx', 'strong adx', 'adx above', 'adx >', 'adx greater']):
+                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
                 if adx_col:
-                    df[adx_col] = pd.to_numeric(df[adx_col], errors='coerce')
-                    top_stocks = df.nlargest(5, adx_col)
-                    return top_stocks.to_dict('records')
+                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
+                    # Filter ADX > 25 for "high ADX"
+                    filtered_df = filtered_df[filtered_df[adx_col] > 25]
+                    filter_applied = True
             
+            # Handle "top", "best", "strongest" queries
+            if any(word in query_lower for word in ['top', 'best', 'strongest', 'highest', 'leading']):
+                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
+                if adx_col:
+                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
+                    filtered_df = filtered_df.nlargest(10, adx_col)
+                    filter_applied = True
+            
+            # Handle "show", "list", "get", "find" queries - return sample stocks
+            if any(word in query_lower for word in ['show', 'list', 'get', 'find', 'which', 'what']) and not filter_applied:
+                # If no specific filter but user is asking for stocks, return top 10 by ADX
+                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
+                if adx_col:
+                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
+                    filtered_df = filtered_df.nlargest(10, adx_col)
+                    filter_applied = True
+                else:
+                    # Just return first 10 if no ADX
+                    filtered_df = filtered_df.head(10)
+                    filter_applied = True
+            
+            # Return filtered results
+            if filter_applied and not filtered_df.empty:
+                return filtered_df.head(20).to_dict('records')  # Max 20 stocks
+            
+            # If filter was applied but no results, return None (let AI explain)
+            if filter_applied and filtered_df.empty:
+                return None
+            
+            # If no filter and generic query, return None (AI will just answer)
             return None
             
         except Exception as e:
             print(f"⚠️ Error extracting relevant stocks: {str(e)}")
             return None
+    
+    def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> str:
+        """Helper to find column by possible name variations"""
+        for col in df.columns:
+            col_clean = col.lower().replace('_', '').replace(' ', '')
+            for name in possible_names:
+                if col_clean == name.lower().replace('_', '').replace(' ', ''):
+                    return col
+        return None
     
     def get_quick_insights(self, stock_data: List[Dict]) -> str:
         """Generate quick insights about the market"""
