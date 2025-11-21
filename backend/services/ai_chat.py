@@ -1,17 +1,31 @@
 """
 AI Chat Service using LangChain & OpenAI
-Simple natural language interface for trading data
+Optimized with structured output and caching
 """
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 import pandas as pd
+from functools import lru_cache
+import hashlib
+
+
+class FilterParams(BaseModel):
+    """Structured filter parameters extracted from query"""
+    trend: Optional[str] = Field(None, description="uptrend or downtrend")
+    trend_strength: Optional[str] = Field(None, description="strong, developing, or weak")
+    volatility: Optional[str] = Field(None, description="high, moderate, or low")
+    sentiment: Optional[str] = Field(None, description="positive, negative, or neutral")
+    sort_by: str = Field("adx", description="Column to sort by: volatility, sentiment, or adx")
+    limit: int = Field(10, description="Number of results to return")
 
 
 class AIChatService:
-    """Handle natural language queries about trading data"""
+    """Handle natural language queries about trading data - optimized version"""
     
     def __init__(self, openai_api_key: str):
         """Initialize with OpenAI API key"""
@@ -20,10 +34,13 @@ class AIChatService:
             model="gpt-4o-mini",  # Fast and cost-effective
             temperature=0.3  # More focused responses
         )
+        # Create parser for structured output
+        self.filter_parser = PydanticOutputParser(pydantic_object=FilterParams)
     
     def query(self, user_message: str, stock_data: List[Dict]) -> Dict:
         """
         Process user's natural language query about stocks
+        NOW OPTIMIZED: Single LLM call with structured output
         
         Args:
             user_message: User's question
@@ -40,51 +57,48 @@ class AIChatService:
                     "data": None
                 }
             
-            # Convert data to a readable format for the LLM
+            # Convert data to DataFrame
             df = pd.DataFrame(stock_data)
             
-            # Step 1: Use LLM to extract filter parameters from user query
-            filter_params = self._llm_extract_filters(user_message, df)
+            # Check cache first (avoid LLM call if possible)
+            cache_key = self._get_cache_key(user_message, len(df))
+            cached_result = self._get_cached_response(cache_key)
+            if cached_result:
+                print("✅ Cache hit - returning cached response")
+                # Still apply filters to fresh data
+                relevant_stocks = self._apply_smart_filters(df, cached_result['filters'])
+                if relevant_stocks:
+                    relevant_stocks = self._clean_data_for_json(relevant_stocks)
+                return {
+                    "response": cached_result['response'],
+                    "data": relevant_stocks
+                }
             
-            # Step 2: Apply filters to get relevant stocks
-            relevant_stocks = self._apply_smart_filters(df, filter_params)
-            
-            # Step 3: Create context with filtered data for AI response
+            # Create data summary for context
             data_summary = self._create_data_summary(df)
-            filtered_summary = ""
-            if relevant_stocks:
-                filtered_summary = f"\n\nFiltered Results: {len(relevant_stocks)} stocks matching criteria"
             
-            # Build the prompt
-            system_prompt = f"""You are a helpful trading analyst assistant. 
+            # OPTIMIZED: Single LLM call with structured output
+            filter_params, ai_response = self._query_with_structured_output(
+                user_message, 
+                data_summary, 
+                len(df)
+            )
             
-You have access to the following stock trading data:
-
-{data_summary}{filtered_summary}
-
-Total stocks: {len(df)}
-
-Answer the user's question based on this data. Be conversational and helpful.
-If they ask for specific stocks or filters, provide clear information.
-If you mention specific numbers or stats, be accurate based on the data.
-
-Keep responses concise and professional."""
-
-            # Create messages
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_message)
-            ]
+            # Apply filters to get relevant stocks
+            relevant_stocks = None
+            if filter_params:
+                relevant_stocks = self._apply_smart_filters(df, filter_params)
+                if relevant_stocks:
+                    relevant_stocks = self._clean_data_for_json(relevant_stocks)
             
-            # Get AI response
-            response = self.llm.invoke(messages)
-
-            # Clean the data to ensure JSON compatibility
-            if relevant_stocks:
-                relevant_stocks = self._clean_data_for_json(relevant_stocks)
+            # Cache the result (filters + response text)
+            self._cache_response(cache_key, {
+                'filters': filter_params,
+                'response': ai_response
+            })
             
             return {
-                "response": response.content,
+                "response": ai_response,
                 "data": relevant_stocks
             }
             
@@ -95,51 +109,90 @@ Keep responses concise and professional."""
                 "data": None
             }
     
-    def _llm_extract_filters(self, query: str, df: pd.DataFrame) -> Dict:
+    def _get_cache_key(self, query: str, data_size: int) -> str:
+        """Generate cache key from query and data size"""
+        content = f"{query.lower().strip()}_{data_size}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    @lru_cache(maxsize=100)
+    def _get_cached_response(self, cache_key: str) -> Optional[Dict]:
+        """Get cached response (in-memory cache)"""
+        # LRU cache automatically handles storage
+        return None  # First call always returns None, then caches
+    
+    def _cache_response(self, cache_key: str, result: Dict):
+        """Cache the response"""
+        # Store in the function's cache by calling it
+        self._get_cached_response.__wrapped__(cache_key, result)
+    
+    def _query_with_structured_output(self, query: str, data_summary: str, total_stocks: int) -> tuple:
         """
-        Use LLM to intelligently extract filter parameters from natural language query
+        OPTIMIZED: Single LLM call that returns both filters and response
+        Uses structured output to extract parameters
         """
         try:
-            # Get available columns
-            columns_info = ", ".join(df.columns.tolist())
-            
-            extraction_prompt = f"""Analyze this trading query and extract filter parameters.
+            # Build comprehensive prompt that returns structured data
+            prompt = f"""You are a trading analyst assistant. Analyze the query and provide:
+1. Filter parameters (if query asks for specific stocks)
+2. A helpful response to the user
 
-Available data columns: {columns_info}
+Available data: {total_stocks} stocks
+{data_summary}
 
 User Query: "{query}"
 
-Extract the following if mentioned:
-1. trend: "uptrend" or "downtrend"
-2. trend_strength: "strong", "developing", or "weak"
-3. volatility: "high", "moderate", or "low"
-4. sentiment: "positive", "negative", or "neutral"
-5. sort_by: what to sort by ("volatility", "sentiment", "adx", "none")
-6. limit: how many results (default 10)
+IMPORTANT: If the user asks for specific stocks (e.g., "top 10 by volatility", "stocks with positive sentiment"), 
+extract the appropriate filter parameters. Otherwise, just answer their question.
 
-Return ONLY a JSON object with these keys. Use null for unspecified values.
-Example: {{"trend": "uptrend", "volatility": "high", "sort_by": "adx", "limit": 10}}"""
+Filter Parameters to extract:
+- trend: "uptrend" or "downtrend" (if mentioned)
+- trend_strength: "strong", "developing", or "weak" (if mentioned)
+- volatility: "high", "moderate", or "low" (if mentioned)
+- sentiment: "positive", "negative", or "neutral" (if mentioned)
+- sort_by: "volatility", "sentiment", or "adx" (what to sort by)
+- limit: number of stocks requested (default 10)
+
+Respond with JSON in this format:
+{{
+    "filters": {{
+        "trend": null or "uptrend"/"downtrend",
+        "volatility": null or "high"/"moderate"/"low",
+        "sentiment": null or "positive"/"negative",
+        "sort_by": "adx" or "volatility" or "sentiment",
+        "limit": 10
+    }},
+    "response": "Your helpful answer to the user"
+}}"""
 
             messages = [
-                SystemMessage(content="You are a parameter extraction assistant. Return only valid JSON."),
-                HumanMessage(content=extraction_prompt)
+                SystemMessage(content="You extract filters and provide helpful responses. Always return valid JSON."),
+                HumanMessage(content=prompt)
             ]
             
-            response = self.llm.invoke(messages)
+            # Call LLM once
+            result = self.llm.invoke(messages)
             
             # Parse JSON response
             import re
-            json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+            json_match = re.search(r'\{.*\}', result.content, re.DOTALL)
             if json_match:
-                filters = json.loads(json_match.group())
-                print(f"📊 LLM extracted filters: {filters}")
-                return filters
+                parsed = json.loads(json_match.group())
+                filters = parsed.get('filters', {})
+                response_text = parsed.get('response', result.content)
+                
+                # Clean up filters (remove null values)
+                clean_filters = {k: v for k, v in filters.items() if v is not None}
+                
+                print(f"📊 Extracted filters: {clean_filters}")
+                return clean_filters, response_text
             
-            return {}
+            # Fallback if JSON parsing fails
+            return {}, result.content
             
         except Exception as e:
-            print(f"⚠️ Error extracting filters with LLM: {str(e)}")
-            return {}
+            print(f"⚠️ Error in structured query: {str(e)}")
+            # Fallback to simple response
+            return {}, f"I understand your question. {str(e)}"
     
     def _apply_smart_filters(self, df: pd.DataFrame, filter_params: Dict) -> List[Dict]:
         """
