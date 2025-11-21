@@ -124,8 +124,8 @@ const ChatInterface = () => {
               {message.data && message.data.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-gray-300">
                   <p className="text-xs font-semibold mb-1">Found {message.data.length} stocks:</p>
-                  <div className="space-y-1">
-                    {message.data.slice(0, 5).map((stock, i) => (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {message.data.map((stock, i) => (
                       <p key={i} className="text-xs">
                         {stock.Symbol || stock.symbol} - {stock.Trend || stock.trend}
                       </p>
