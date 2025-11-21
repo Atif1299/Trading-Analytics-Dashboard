@@ -88,8 +88,13 @@ class AIChatService:
             relevant_stocks = None
             if filter_params:
                 relevant_stocks = self._apply_smart_filters(df, filter_params)
-                if relevant_stocks:
-                    relevant_stocks = self._clean_data_for_json(relevant_stocks)
+            else:
+                # If no filters specified, return top 10 by ADX (default)
+                relevant_stocks = self._get_default_stocks(df)
+            
+            # Clean data for JSON
+            if relevant_stocks:
+                relevant_stocks = self._clean_data_for_json(relevant_stocks)
             
             # Cache the result (filters + response text)
             self._cache_response(cache_key, {
@@ -337,6 +342,24 @@ Respond with JSON in this format:
             print(f"⚠️ Error creating data summary: {str(e)}")
             return "Data summary unavailable"
 
+    def _get_default_stocks(self, df: pd.DataFrame, limit: int = 10) -> List[Dict]:
+        """
+        Return default stocks when no specific filters are requested
+        Sorts by ADX (trend strength) to show most active stocks
+        """
+        try:
+            adx_col = self._find_column(df, ['adx', 'adx '])
+            if adx_col:
+                df[adx_col] = pd.to_numeric(df[adx_col], errors='coerce')
+                result_df = df.nlargest(limit, adx_col)
+                return result_df.to_dict('records')
+            else:
+                # Fallback to first N stocks if ADX column not found
+                return df.head(limit).to_dict('records')
+        except Exception as e:
+            print(f"⚠️ Error getting default stocks: {str(e)}")
+            return df.head(limit).to_dict('records')
+    
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> str:
         """Helper to find column by possible name variations"""
         for col in df.columns:
