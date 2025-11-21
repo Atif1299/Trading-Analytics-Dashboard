@@ -2,10 +2,12 @@
  * Stock Card Component
  * Clean display of individual stock information
  */
-import React from 'react';
-import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, TrendingDown, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 
 const StockCard = ({ stock }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   const isUptrend = stock.Trend?.toLowerCase() === 'uptrend' || stock.trend?.toLowerCase() === 'uptrend';
   const symbol = stock.Symbol || stock.symbol || 'N/A';
   const price = stock.Price || stock.price;
@@ -80,9 +82,24 @@ const StockCard = ({ stock }) => {
       {/* Rational (if available) */}
       {stock.rational && stock.rational.trim() !== '' && (
         <div className="mt-3 pt-3 border-t">
-          <p className="text-xs text-gray-600 line-clamp-2">
-            {stock.rational}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className={`text-xs text-gray-600 flex-1 ${!isExpanded ? 'line-clamp-2' : ''}`}>
+              {stock.rational}
+            </p>
+            {stock.rational.length > 100 && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-primary-600 hover:text-primary-700 flex-shrink-0"
+                aria-label={isExpanded ? 'Show less' : 'Show more'}
+              >
+                {isExpanded ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
