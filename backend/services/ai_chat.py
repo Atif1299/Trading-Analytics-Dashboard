@@ -43,15 +43,24 @@ class AIChatService:
             # Convert data to a readable format for the LLM
             df = pd.DataFrame(stock_data)
             
-            # Create a summary of available data
+            # Step 1: Use LLM to extract filter parameters from user query
+            filter_params = self._llm_extract_filters(user_message, df)
+            
+            # Step 2: Apply filters to get relevant stocks
+            relevant_stocks = self._apply_smart_filters(df, filter_params)
+            
+            # Step 3: Create context with filtered data for AI response
             data_summary = self._create_data_summary(df)
+            filtered_summary = ""
+            if relevant_stocks:
+                filtered_summary = f"\n\nFiltered Results: {len(relevant_stocks)} stocks matching criteria"
             
             # Build the prompt
             system_prompt = f"""You are a helpful trading analyst assistant. 
             
 You have access to the following stock trading data:
 
-{data_summary}
+{data_summary}{filtered_summary}
 
 Total stocks: {len(df)}
 
@@ -69,10 +78,7 @@ Keep responses concise and professional."""
             
             # Get AI response
             response = self.llm.invoke(messages)
-            
-            # Try to extract relevant stocks if query is about specific criteria
-            relevant_stocks = self._extract_relevant_stocks(user_message, df)
-            
+
             # Clean the data to ensure JSON compatibility
             if relevant_stocks:
                 relevant_stocks = self._clean_data_for_json(relevant_stocks)
@@ -88,6 +94,138 @@ Keep responses concise and professional."""
                 "response": f"Sorry, I encountered an error processing your request: {str(e)}",
                 "data": None
             }
+    
+    def _llm_extract_filters(self, query: str, df: pd.DataFrame) -> Dict:
+        """
+        Use LLM to intelligently extract filter parameters from natural language query
+        """
+        try:
+            # Get available columns
+            columns_info = ", ".join(df.columns.tolist())
+            
+            extraction_prompt = f"""Analyze this trading query and extract filter parameters.
+
+Available data columns: {columns_info}
+
+User Query: "{query}"
+
+Extract the following if mentioned:
+1. trend: "uptrend" or "downtrend"
+2. trend_strength: "strong", "developing", or "weak"
+3. volatility: "high", "moderate", or "low"
+4. sentiment: "positive", "negative", or "neutral"
+5. sort_by: what to sort by ("volatility", "sentiment", "adx", "none")
+6. limit: how many results (default 10)
+
+Return ONLY a JSON object with these keys. Use null for unspecified values.
+Example: {{"trend": "uptrend", "volatility": "high", "sort_by": "adx", "limit": 10}}"""
+
+            messages = [
+                SystemMessage(content="You are a parameter extraction assistant. Return only valid JSON."),
+                HumanMessage(content=extraction_prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            
+            # Parse JSON response
+            import re
+            json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+            if json_match:
+                filters = json.loads(json_match.group())
+                print(f"📊 LLM extracted filters: {filters}")
+                return filters
+            
+            return {}
+            
+        except Exception as e:
+            print(f"⚠️ Error extracting filters with LLM: {str(e)}")
+            return {}
+    
+    def _apply_smart_filters(self, df: pd.DataFrame, filter_params: Dict) -> List[Dict]:
+        """
+        Apply extracted filter parameters to dataframe
+        """
+        try:
+            if not filter_params:
+                return None
+            
+            filtered_df = df.copy()
+            
+            # Apply trend filter
+            if filter_params.get('trend'):
+                trend_col = self._find_column(filtered_df, ['trend'])
+                if trend_col:
+                    filtered_df = filtered_df[
+                        filtered_df[trend_col].astype(str).str.lower().str.contains(
+                            filter_params['trend'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply trend strength filter
+            if filter_params.get('trend_strength'):
+                strength_col = self._find_column(filtered_df, ['trend_strength', 'trendstrength'])
+                if strength_col:
+                    filtered_df = filtered_df[
+                        filtered_df[strength_col].astype(str).str.lower().str.contains(
+                            filter_params['trend_strength'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply volatility filter
+            if filter_params.get('volatility'):
+                vol_col = self._find_column(filtered_df, ['volatility'])
+                if vol_col:
+                    filtered_df = filtered_df[
+                        filtered_df[vol_col].astype(str).str.lower().str.contains(
+                            filter_params['volatility'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply sentiment filter
+            if filter_params.get('sentiment'):
+                sentiment_col = self._find_column(filtered_df, ['sentimentscore', 'sentiment_score', 'sentiment'])
+                if sentiment_col:
+                    filtered_df[sentiment_col] = pd.to_numeric(filtered_df[sentiment_col], errors='coerce')
+                    if filter_params['sentiment'].lower() == 'positive':
+                        filtered_df = filtered_df[filtered_df[sentiment_col] > 0]
+                    elif filter_params['sentiment'].lower() == 'negative':
+                        filtered_df = filtered_df[filtered_df[sentiment_col] < 0]
+            
+            # Sort by requested column
+            sort_by = filter_params.get('sort_by', 'adx')
+            if sort_by and sort_by != 'none':
+                sort_col = None
+                if sort_by == 'volatility':
+                    # For volatility, map text to numeric for sorting
+                    vol_col = self._find_column(filtered_df, ['volatility'])
+                    if vol_col:
+                        vol_map = {'high': 3, 'moderate': 2, 'low': 1}
+                        filtered_df['vol_numeric'] = filtered_df[vol_col].astype(str).str.lower().map(vol_map)
+                        sort_col = 'vol_numeric'
+                elif sort_by == 'sentiment':
+                    sort_col = self._find_column(filtered_df, ['sentimentscore', 'sentiment_score'])
+                    if sort_col:
+                        filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
+                elif sort_by == 'adx':
+                    sort_col = self._find_column(filtered_df, ['adx', 'adx '])
+                    if sort_col:
+                        filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
+                
+                if sort_col:
+                    filtered_df = filtered_df.nlargest(filter_params.get('limit', 10), sort_col)
+            
+            # Apply limit
+            limit = filter_params.get('limit', 10)
+            filtered_df = filtered_df.head(limit)
+            
+            if not filtered_df.empty:
+                return filtered_df.to_dict('records')
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ Error applying smart filters: {str(e)}")
+            return None
     
     def _clean_data_for_json(self, data: List[Dict]) -> List[Dict]:
         """Clean data to ensure JSON compatibility (remove NaN, Infinity)"""
@@ -145,101 +283,7 @@ Keep responses concise and professional."""
         except Exception as e:
             print(f"⚠️ Error creating data summary: {str(e)}")
             return "Data summary unavailable"
-    
-    def _extract_relevant_stocks(self, query: str, df: pd.DataFrame) -> List[Dict]:
-        """
-        Extract stocks relevant to the query using expanded keyword matching
-        """
-        try:
-            query_lower = query.lower()
-            filtered_df = df.copy()
-            filter_applied = False
-            
-            # Expanded keyword mapping for better matching
-            filter_keywords = {
-                # Uptrend synonyms
-                ('uptrend', 'bullish', 'rising', 'up trend', 'going up', 'increasing'): ('Trend', 'uptrend'),
-                # Downtrend synonyms
-                ('downtrend', 'bearish', 'falling', 'down trend', 'going down', 'decreasing'): ('Trend', 'downtrend'),
-                # Strong trend synonyms
-                ('strong', 'powerful', 'strongest', 'high strength'): ('Trend_strength', 'strong'),
-                # High volatility synonyms
-                ('high volatility', 'volatile', 'high vol', 'unstable'): ('Volatility', 'high'),
-                # Moderate volatility
-                ('moderate volatility', 'medium volatility', 'moderate vol'): ('Volatility', 'moderate'),
-                # Low volatility
-                ('low volatility', 'stable', 'low vol'): ('Volatility', 'low'),
-                # Positive sentiment
-                ('positive sentiment', 'good sentiment', 'bullish sentiment', 'optimistic'): ('sentimentScore', lambda x: x > 0),
-                # Negative sentiment
-                ('negative sentiment', 'bad sentiment', 'bearish sentiment', 'pessimistic'): ('sentimentScore', lambda x: x < 0),
-            }
-            
-            # Apply filters based on keyword matches
-            for keywords, (column, value) in filter_keywords.items():
-                if any(keyword in query_lower for keyword in keywords):
-                    # Find the actual column name (handle case variations)
-                    col_name = None
-                    for col in filtered_df.columns:
-                        if col.lower().replace('_', '').replace(' ', '') == column.lower().replace('_', '').replace(' ', ''):
-                            col_name = col
-                            break
-                    
-                    if col_name:
-                        if callable(value):
-                            # Handle lambda functions for numeric comparisons
-                            filtered_df[col_name] = pd.to_numeric(filtered_df[col_name], errors='coerce')
-                            filtered_df = filtered_df[filtered_df[col_name].apply(value)]
-                        else:
-                            # String matching (case insensitive)
-                            filtered_df = filtered_df[filtered_df[col_name].astype(str).str.lower().str.contains(value.lower(), na=False)]
-                        filter_applied = True
-            
-            # Handle ADX-related queries
-            if any(word in query_lower for word in ['high adx', 'strong adx', 'adx above', 'adx >', 'adx greater']):
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    # Filter ADX > 25 for "high ADX"
-                    filtered_df = filtered_df[filtered_df[adx_col] > 25]
-                    filter_applied = True
-            
-            # Handle "top", "best", "strongest" queries
-            if any(word in query_lower for word in ['top', 'best', 'strongest', 'highest', 'leading']):
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    filtered_df = filtered_df.nlargest(10, adx_col)
-                    filter_applied = True
-            
-            # Handle "show", "list", "get", "find" queries - return sample stocks
-            if any(word in query_lower for word in ['show', 'list', 'get', 'find', 'which', 'what']) and not filter_applied:
-                # If no specific filter but user is asking for stocks, return top 10 by ADX
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    filtered_df = filtered_df.nlargest(10, adx_col)
-                    filter_applied = True
-                else:
-                    # Just return first 10 if no ADX
-                    filtered_df = filtered_df.head(10)
-                    filter_applied = True
-            
-            # Return filtered results
-            if filter_applied and not filtered_df.empty:
-                return filtered_df.head(20).to_dict('records')  # Max 20 stocks
-            
-            # If filter was applied but no results, return None (let AI explain)
-            if filter_applied and filtered_df.empty:
-                return None
-            
-            # If no filter and generic query, return None (AI will just answer)
-            return None
-            
-        except Exception as e:
-            print(f"⚠️ Error extracting relevant stocks: {str(e)}")
-            return None
-    
+
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> str:
         """Helper to find column by possible name variations"""
         for col in df.columns:
