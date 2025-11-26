@@ -1,0 +1,136 @@
+//------------------  RS Rating  ---------------------// and // SP500 -> 0S&P5 //
+
+//Relative Price Strength (RS) Rating or Relative Strenght.
+//This is a measure of a stock's price performance over the last
+//twelve months, compared to all stocks in IBD's Database.
+//The rating scale ranges frome 1 (lowest) to 99 (highest)
+//At least this is the IBD proprietary rating's defintion.
+//Let's create an equivalent here for TradingView!
+//
+// © RaviYendru thanks for providing the intial script
+// Fred6724 - Let's see if it is possible to get better results
+
+// Constant Value
+comparativeTickerId = 'SP:SPX'  // For RS Score Calculation, the SPX Value only makes sens because of the GitHub project
+
+
+hideRSLine  = input(false, title='Hide RS Line', group='----------RS Rating----------', inline='0')
+hideRSRat   = input(false, title='Hide Rating', group = '----------RS Rating----------', inline='0')
+//seedetail   = input(false, title='Display the 3 results', group = 'Parameters', inline='0')
+ratingOnly  = input(false, title='Rating Only', group = '----------RS Rating----------')
+lineTicker  = input('SP:SPX', title='Comparative Symbol for Line', group = '----------RS Rating----------', tooltip = 'Reference ticker used for calculation of the RS Line.')
+SpxValue    = input(4200, title='Value of Comparative Symbol', group = '----------RS Rating----------', tooltip = 'Used to gather a constant value')
+offset      = input.int(80, minval = 0, maxval = 300, title='Offset (%)', group = '----------RS Rating----------', tooltip = 'Used to display the RS Line under the price.')
+colorRS     = input(color.rgb(0, 0, 255), title = 'Color of RS Line & Rating', group = '----------RS Rating----------')
+plotNewHigh = input(true, title = 'Plot RS New Highs', group = '----------RS Rating----------')
+rsNewHigh   = input.string('RS New Highs', title = 'Type', options=['RS New Highs','RS New Highs Before Price', 'Historical RS New Highs', 'Historical RS New Highs  Before Price'], group = '----------RS Rating----------')
+blueDotCol  = input(color.rgb(121, 213, 242,62), title = 'Color of Dots', group = '----------RS Rating----------')
+lookback    = input.int(250, title = 'Look-back', minval = 1, maxval = 252, group = '----------RS Rating----------', tooltip = 'The lookback for calculation of price and RS New Highs.')
+sizeLabHigh = input.string('Tiny', title = 'Size', options = ['Tiny', 'Small', 'Normal', 'Large'], group = '----------RS Rating----------')
+plotNewLow  = input(false, title = 'Plot RS New Lows', group = '----------RS Rating----------')
+rsNewLow    = input.string('Historical RS New Lows', title = 'Type', options=['RS New Lows','RS New Lows Before Price', 'Historical RS New Lows', 'Historical RS New Lows  Before Price'], group = '----------RS Rating----------')
+redDotCol   = input(color.rgb(255, 82, 82, 62), title = 'Color', group = '----------RS Rating----------')
+lookback2   = input.int(250, title = 'Look-back', minval = 1, maxval = 252, group = '----------RS Rating----------', tooltip = 'The lookback for calculation of price and RS New Lows.')
+sizeLabLow  = input.string('Tiny', title = 'Size', options = ['Tiny', 'Small', 'Normal', 'Large'], group = '----------RS Rating----------')
+boolMa      = input(false, title = 'Display MA 1 on RS Line', group = '1st MA on RS Line')
+lenMa       = input(21, title = 'Lenght Da', group = '1st MA on RS Line', inline = 'c')
+colMa       = input(color.orange, title = 'Color', group = '1st MA on RS Line', inline = 'c')
+typMa       = input.string('EMA', title = 'Type Da', options = ['SMA', 'EMA'], group = '1st MA on RS Line', inline = 'c')
+lenMaWe     = input(10, title = 'Lenght We', group = '1st MA on RS Line', inline = 'c')
+typMaWe     = input.string('SMA', title = 'Type We', options = ['SMA', 'EMA'], group = '1st MA on RS Line', inline = 'c')
+fillMa      = input(false, title = 'Area Color', group = '1st MA on RS Line')
+posCol      = input(color.rgb(0, 230, 119, 75), title = 'Positive Area', group = '1st MA on RS Line', inline = 'd')
+negCol      = input(color.rgb(255, 82, 82, 75),  title = 'Negative Area', group = '1st MA on RS Line', inline = 'd')
+boolMa2     = input(false, title = 'Display MA 2 on RS Line', group = '2nd MA on RS Line')
+lenMa2      = input(50, title = 'Lenght Da', group = '2nd MA on RS Line', inline = 'c')
+colMa2      = input(color.red, title = 'Color', group = '2nd MA on RS Line', inline = 'c')
+typMa2      = input.string('EMA', title = 'Type Da', options = ['SMA', 'EMA'], group = '2nd MA on RS Line', inline = 'c')
+lenMa2We    = input(21, title = 'Lenght We', group = '2nd MA on RS Line', inline = 'c')
+typMa2We    = input.string('SMA', title = 'Type We', options = ['SMA', 'EMA'], group = '2nd MA on RS Line', inline = 'c')
+allowReplay = input(false, title = 'Use fix values for replay mode', group = 'RS Replay mode (Approximate Method)', tooltip = 'Here we use constant values in order to provide the environment regardless of the date. See RSRATING ticker and report close values to have the last data.')
+first2      = input(195.93, title='For 99 stocks' , group = 'RS Replay mode (Approximate Method)')
+scnd2       = input(117.11, title='For 90+ stocks', group = 'RS Replay mode (Approximate Method)')
+thrd2       = input(99.04, title='For 70+ stocks' , group = 'RS Replay mode (Approximate Method)')
+frth2       = input(91.66, title='For 50+ stocks' , group = 'RS Replay mode (Approximate Method)')
+ffth2       = input(80.96, title='For 30+ stocks' , group = 'RS Replay mode (Approximate Method)')
+sxth2       = input(53.64, title='For 10+ stocks' , group = 'RS Replay mode (Approximate Method)')
+svth2       = input(24.86, title='For 1- stocks'  , group = 'RS Replay mode (Approximate Method)')
+
+// Blue Dot
+// If Blue Dot is ste to 250 Da, than we want it to be set on 52 We on the Weekly TimeFrame
+if (lookback  == 250 and timeframe.isweekly)
+    lookback  := 52
+if (lookback2 == 250 and timeframe.isweekly)
+    lookback2 := 52
+
+// Switch Label Size
+highLabel = switch sizeLabHigh
+    'Normal'  => size.normal
+    'Tiny'    => size.tiny
+    'Small'   => size.small
+    'Large'   => size.large
+
+lowLabel  = switch sizeLabLow
+    'Normal'  => size.normal
+    'Tiny'    => size.tiny
+    'Small'   => size.small
+    'Large'   => size.large
+
+// Using bar index in case of IPO to avoid NaN results
+// Added max_bars_max = 253 to improve display speed
+n63      = bar_index < 63  ? bar_index:63 
+n126     = bar_index < 126 ? bar_index:126
+n189     = bar_index < 189 ? bar_index:189
+n252     = bar_index < 252 ? bar_index:252
+
+
+// Comparative Ticker for RS Line
+comparativeSymbol   = request.security(lineTicker, timeframe.period, close)
+// RS Line but multiplied by a little bit less than the constant value of the comparative ticker for correct display
+rsCurve             = (close/comparativeSymbol)
+// Adapt Ratio for Sectors and Indices
+if (syminfo.industry == 'Investment Trusts/Mutual Funds')
+    offset := 90
+// We use a wider offset for Weekly timeframe for a smoother display
+rsRatio             = timeframe.isweekly ? SpxValue*(offset-10)/100:SpxValue*offset/100
+rs                  = rsCurve*rsRatio
+prevlookback  = lookback
+prevlookback2 = lookback2 // For RS New Lows
+lookback := math.min(lookback - 1, bar_index)
+rsPlot = plot(hideRSLine ? na:rs, title='RS Line', style=plot.style_line, linewidth=1, color=colorRS)
+
+// 1st MA on RS Line
+// SMA and EMA
+rsMA      = ta.sma(rs, lenMa)
+if(typMa == 'SMA' and not timeframe.isweekly)
+    rsMA      := ta.sma(rs, lenMa)
+if(typMa == 'EMA' and not timeframe.isweekly)  
+    rsMA      := ta.ema(rs, lenMa)
+if(typMaWe == 'SMA' and timeframe.isweekly)
+    rsMA      := ta.sma(rs, lenMaWe)
+if(typMaWe == 'EMA' and timeframe.isweekly)
+    rsMA      := ta.ema(rs, lenMaWe)
+
+maPlot    = plot(boolMa ? rsMA :na,    color = colMa, linewidth = 1)
+
+// Color Filling
+// I will use an invisible MA to be able to choose or not the display of the fill
+maPlot2    = plot(boolMa and fillMa ? rsMA:na,    color = color.rgb(0,0,0,100), linewidth = 1)
+// This variable gets the color that will be used for the fill
+fillCol = rs > rsMA ? posCol:negCol
+// Here if a MA is missing, there is no fill
+fill(rsPlot, maPlot2 ,   color=fillCol)
+
+// 2nd MA on RS Line
+// SMA and EMA
+rsMA2      = ta.sma(rs, lenMa2)
+if (typMa2 == 'SMA' and not timeframe.isweekly)
+    rsMA2      := ta.sma(rs, lenMa2)
+if (typMa2 == 'EMA' and not timeframe.isweekly)  
+    rsMA2      := ta.ema(rs, lenMa2)
+if (typMa2We == 'SMA' and timeframe.isweekly)
+    rsMA2      := ta.sma(rs, lenMa2We)
+if (typMa2We == 'EMA' and timeframe.isweekly)
+    rsMA2      := ta.ema(rs, lenMa2We)
+
+maPlot3  = plot(boolMa2 ? rsMA2 :na,    color = colMa2, linewidth = 1)

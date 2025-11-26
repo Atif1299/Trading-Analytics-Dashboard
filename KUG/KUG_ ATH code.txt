@@ -1,0 +1,105 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Pineify
+
+//@version=6
+indicator('FC - Peak Finder', overlay = true)
+
+// Input options for displaying labels, colors, font sizes, and offsets
+showATHLabel = input.bool(true, 'Show ATH Label')
+showATLLabel = input.bool(true, 'Show ATL Label')
+showCustomLookbackHigh1Label = input.bool(true, 'Show Custom Lookback High Label')
+joinLineBreaks = input.bool(false, 'Join line breaks (continuous ATH/ATL lines)')
+athLabelColor = input.color(color.green, 'ATH Label Background Color')
+atlLabelColor = input.color(color.red, 'ATL Label Background Color')
+customLookbackHigh1LabelColor = input.color(color.blue, 'Custom Lookback High Label Background Color')
+athFontColor = input.color(color.white, 'ATH Font Color')
+atlFontColor = input.color(color.white, 'ATL Font Color')
+customLookbackHigh1FontColor = input.color(color.white, 'Custom Lookback High Font Color')
+athFontSizeInput = input.string('normal', 'ATH Font Size', options = ['tiny', 'small', 'normal', 'large'])
+atlFontSizeInput = input.string('normal', 'ATL Font Size', options = ['tiny', 'small', 'normal', 'large'])
+customLookbackHigh1FontSizeInput = input.string('normal', 'Custom Lookback High Font Size', options = ['tiny', 'small', 'normal', 'large'])
+athOffsetPerc = input.float(1.0, 'ATH Label Offset (%)', minval = 0.0, step = 0.1)
+atlOffsetPerc = input.float(1.0, 'ATL Label Offset (%)', minval = 0.0, step = 0.1)
+customLookbackHigh1OffsetPerc = input.float(1.0, 'Custom Lookback High Label Offset (%)', minval = 0.0, step = 0.1)
+showCustomLookbackHigh1 = input.bool(true, 'Show Custom Lookback High Line')
+
+// Price label visibility
+showATHPriceLabel = input.bool(true, 'Show ATH Price Label')
+showATLPriceLabel = input.bool(true, 'Show ATL Price Label')
+showCustomLookbackHigh1PriceLabel = input.bool(true, 'Show Custom Lookback High Price Label')
+
+// Custom lookback high 2 settings
+showCustomLookbackHigh2 = input.bool(true, 'Show Second Custom Lookback High Line')
+showCustomLookbackHigh2Label = input.bool(true, 'Show Second Custom Lookback High Label')
+customLookbackHigh2LabelColor = input.color(color.fuchsia, 'Second Custom Lookback High Label Background Color')
+customLookbackHigh2FontColor = input.color(color.white, 'Second Custom Lookback High Font Color')
+customLookbackHigh2FontSizeInput = input.string('normal', 'Second Custom Lookback High Font Size', options = ['tiny', 'small', 'normal', 'large'])
+customLookbackHigh2OffsetPerc = input.float(1.0, 'Second Custom Lookback High Label Offset (%)', minval = 0.0, step = 0.1)
+showCustomLookbackHigh2PriceLabel = input.bool(true, 'Show Second Custom Lookback High Price Label')
+lookbackTimeframeInput2 = input.string('1M', 'Second Lookback Timeframe', options = ['1D', '1W', '1M'])
+lookbackPeriodInput2 = input.int(6, 'Second Custom Lookback Period (Units of Second Lookback Timeframe)', minval = 1)
+
+// Variables for ATH/ATL
+var float allTimeHigh = na
+var float allTimeLow = na
+var int athTimestamp = na
+var int atlTimestamp = na
+var int athBarIndex = na
+var int atlBarIndex = na
+var label athLabel = na
+var label atlLabel = na
+
+// Custom lookback highs
+var float customLookbackHigh1 = na
+var float prevCustomLookbackHigh1 = na
+var int customLookbackHigh1Timestamp = na
+var int customLookbackHigh1BarIndex = na
+var label customLookbackHigh1Label = na
+
+var float customLookbackHigh2 = na
+var float prevCustomLookbackHigh2 = na
+var int customLookbackHigh2Timestamp = na
+var int customLookbackHigh2BarIndex = na
+var label customLookbackHigh2Label = na
+
+// Init ATH/ATL
+if barstate.isfirst
+    allTimeHigh := high
+    allTimeLow := low
+else
+    allTimeHigh := math.max(allTimeHigh[1], high)
+    allTimeLow := math.min(allTimeLow[1], low)
+
+// Plot ATH/ATL lines
+plot(series = joinLineBreaks ? allTimeHigh : high > allTimeHigh[1] ? na : allTimeHigh, title = 'ATH', color = color.green, trackprice = showATHPriceLabel)
+plot(series = joinLineBreaks ? allTimeLow : low < allTimeLow[1] ? na : allTimeLow, title = 'ATL', color = color.red, trackprice = showATLPriceLabel)
+
+// Font sizes
+athTextSize = athFontSizeInput == 'tiny' ? size.tiny : athFontSizeInput == 'small' ? size.small : athFontSizeInput == 'large' ? size.large : size.normal
+atlTextSize = atlFontSizeInput == 'tiny' ? size.tiny : atlFontSizeInput == 'small' ? size.small : atlFontSizeInput == 'large' ? size.large : size.normal
+customLookbackHigh1TextSize = customLookbackHigh1FontSizeInput == 'tiny' ? size.tiny : customLookbackHigh1FontSizeInput == 'small' ? size.small : customLookbackHigh1FontSizeInput == 'large' ? size.large : size.normal
+customLookbackHigh2TextSize = customLookbackHigh2FontSizeInput == 'tiny' ? size.tiny : customLookbackHigh2FontSizeInput == 'small' ? size.small : customLookbackHigh2FontSizeInput == 'large' ? size.large : size.normal
+
+// Detect new ATH
+newATH = not barstate.isfirst and high > allTimeHigh[1]
+if newATH and showATHLabel
+    if not na(athLabel)
+        label.delete(athLabel)
+    athTimestamp := time
+    athBarIndex := bar_index
+    float athY = allTimeHigh * (1 + athOffsetPerc / 100)
+    string athPrice = str.tostring(allTimeHigh)
+    // Initial ATH label (without distance)
+    athLabel := label.new(bar_index, athY, 'ATH\n' + athPrice + '\n0 bars / 0 days', yloc = yloc.price, color = athLabelColor, textcolor = athFontColor, style = label.style_label_down, size = athTextSize)
+
+// Update ATH label with bars, days, and % distance
+if not na(athLabel) and showATHLabel
+    int bars = bar_index - athBarIndex
+    int t0 = timestamp('GMT', year(athTimestamp), month(athTimestamp), dayofmonth(athTimestamp), 0, 0)
+    int t1 = timestamp('GMT', year(time), month(time), dayofmonth(time), 0, 0)
+    int days = int((t1 - t0) / 86400000)
+    string elapsed = str.tostring(bars) + ' bars / ' + str.tostring(days) + ' days'
+    string athPrice2 = str.tostring(allTimeHigh)
+    float distPerc = ((close - allTimeHigh) / allTimeHigh) * 100
+    string distText = str.tostring(distPerc, format.mintick) + '% from ATH'
+    label.set_text(athLabel, 'ATH\n' + athPrice2 + '\n' + elapsed + '\n' + distText)
