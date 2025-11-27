@@ -20,6 +20,7 @@ function App() {
     trend: '',
     trend_strength: '',
     volatility: '',
+    sentiment: '',  // New filter
     min_sentiment: null,
     min_adx: null
   });
@@ -103,6 +104,7 @@ function App() {
       trend: '',
       trend_strength: '',
       volatility: '',
+      sentiment: '',  // Reset sentiment
       min_sentiment: null,
       min_adx: null
     };

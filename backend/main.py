@@ -175,6 +175,7 @@ async def get_stocks(
     trend: Optional[str] = Query(None, description="Filter by trend (uptrend/downtrend)"),
     trend_strength: Optional[str] = Query(None, description="Filter by strength"),
     volatility: Optional[str] = Query(None, description="Filter by volatility"),
+    sentiment: Optional[str] = Query(None, description="Filter by sentiment (bullish/neutral/bearish)"),
     min_sentiment: Optional[float] = Query(None, description="Minimum sentiment score"),
     min_adx: Optional[float] = Query(None, description="Minimum ADX value")
 ):
@@ -200,6 +201,8 @@ async def get_stocks(
         filters['trend_strength'] = trend_strength
     if volatility:
         filters['volatility'] = volatility
+    if sentiment:
+        filters['sentiment'] = sentiment
     if min_sentiment is not None:
         filters['min_sentiment'] = min_sentiment
     if min_adx is not None:
