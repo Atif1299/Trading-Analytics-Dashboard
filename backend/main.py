@@ -314,11 +314,12 @@ async def get_alerts():
             
         main_sheet_id = sheet_ids[0].strip()
         
-        # Fetch from TradingView_Alerts sheet
+        # Fetch from TradingView_Alerts sheet (configurable via env)
         # We don't cache alerts as they might be updated frequently by n8n
+        alerts_sheet_name = os.getenv("GOOGLE_ALERTS_SHEET_NAME", "TradingView_Alerts")
         alerts_data = sheets_sync.fetch_sheet_data(
             main_sheet_id,
-            worksheet_name="TradingView_Alerts"
+            worksheet_name=alerts_sheet_name
         )
         
         return {"alerts": alerts_data, "total": len(alerts_data)}
@@ -326,7 +327,8 @@ async def get_alerts():
     except Exception as e:
         print(f"❌ Error fetching alerts: {str(e)}")
         # Return empty list instead of erroring out if sheet doesn't exist yet
-        return {"alerts": [], "total": 0, "message": "Could not fetch alerts. Ensure 'TradingView_Alerts' sheet exists."}
+        alerts_sheet_name = os.getenv("GOOGLE_ALERTS_SHEET_NAME", "TradingView_Alerts")
+        return {"alerts": [], "total": 0, "message": f"Could not fetch alerts. Ensure '{alerts_sheet_name}' sheet exists."}
 
 
 

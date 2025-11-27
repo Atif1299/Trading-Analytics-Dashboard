@@ -14,9 +14,11 @@ const AlertsList = () => {
   const fetchAlerts = async () => {
     try {
       const data = await apiService.getAlerts();
-      // Sort by date descending (newest first)
+      // Sort by date descending (newest first) - with robust parsing
       const sortedAlerts = (data.alerts || []).sort((a, b) => {
-        return new Date(b.Alert_Time) - new Date(a.Alert_Time);
+        const dateA = new Date(a.Alert_Time || 0);
+        const dateB = new Date(b.Alert_Time || 0);
+        return dateB - dateA; // Newest first
       });
       setAlerts(sortedAlerts);
       setError(null);
