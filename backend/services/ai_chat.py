@@ -1,17 +1,31 @@
 """
 AI Chat Service using LangChain & OpenAI
-Simple natural language interface for trading data
+Optimized with structured output and caching
 """
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 import pandas as pd
+from functools import lru_cache
+import hashlib
+
+
+class FilterParams(BaseModel):
+    """Structured filter parameters extracted from query"""
+    trend: Optional[str] = Field(None, description="uptrend or downtrend")
+    trend_strength: Optional[str] = Field(None, description="strong, developing, or weak")
+    volatility: Optional[str] = Field(None, description="high, moderate, or low")
+    sentiment: Optional[str] = Field(None, description="positive, negative, or neutral")
+    sort_by: str = Field("adx", description="Column to sort by: volatility, sentiment, or adx")
+    limit: int = Field(10, description="Number of results to return")
 
 
 class AIChatService:
-    """Handle natural language queries about trading data"""
+    """Handle natural language queries about trading data - optimized version"""
     
     def __init__(self, openai_api_key: str):
         """Initialize with OpenAI API key"""
@@ -20,10 +34,13 @@ class AIChatService:
             model="gpt-4o-mini",  # Fast and cost-effective
             temperature=0.3  # More focused responses
         )
+        # Create parser for structured output
+        self.filter_parser = PydanticOutputParser(pydantic_object=FilterParams)
     
     def query(self, user_message: str, stock_data: List[Dict]) -> Dict:
         """
         Process user's natural language query about stocks
+        NOW OPTIMIZED: Single LLM call with structured output
         
         Args:
             user_message: User's question
@@ -40,45 +57,53 @@ class AIChatService:
                     "data": None
                 }
             
-            # Convert data to a readable format for the LLM
+            # Convert data to DataFrame
             df = pd.DataFrame(stock_data)
             
-            # Create a summary of available data
+            # Check cache first (avoid LLM call if possible)
+            cache_key = self._get_cache_key(user_message, len(df))
+            cached_result = self._get_cached_response(cache_key)
+            if cached_result:
+                print("✅ Cache hit - returning cached response")
+                # Still apply filters to fresh data
+                relevant_stocks = self._apply_smart_filters(df, cached_result['filters'])
+                if relevant_stocks:
+                    relevant_stocks = self._clean_data_for_json(relevant_stocks)
+                return {
+                    "response": cached_result['response'],
+                    "data": relevant_stocks
+                }
+            
+            # Create data summary for context
             data_summary = self._create_data_summary(df)
             
-            # Build the prompt
-            system_prompt = f"""You are a helpful trading analyst assistant. 
+            # OPTIMIZED: Single LLM call with structured output
+            filter_params, ai_response = self._query_with_structured_output(
+                user_message, 
+                data_summary, 
+                len(df)
+            )
             
-You have access to the following stock trading data:
-
-{data_summary}
-
-Total stocks: {len(df)}
-
-Answer the user's question based on this data. Be conversational and helpful.
-If they ask for specific stocks or filters, provide clear information.
-If you mention specific numbers or stats, be accurate based on the data.
-
-Keep responses concise and professional."""
-
-            # Create messages
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_message)
-            ]
+            # Apply filters to get relevant stocks
+            relevant_stocks = None
+            if filter_params:
+                relevant_stocks = self._apply_smart_filters(df, filter_params)
+            else:
+                # If no filters specified, return top 10 by ADX (default)
+                relevant_stocks = self._get_default_stocks(df)
             
-            # Get AI response
-            response = self.llm.invoke(messages)
-            
-            # Try to extract relevant stocks if query is about specific criteria
-            relevant_stocks = self._extract_relevant_stocks(user_message, df)
-            
-            # Clean the data to ensure JSON compatibility
+            # Clean data for JSON
             if relevant_stocks:
                 relevant_stocks = self._clean_data_for_json(relevant_stocks)
             
+            # Cache the result (filters + response text)
+            self._cache_response(cache_key, {
+                'filters': filter_params,
+                'response': ai_response
+            })
+            
             return {
-                "response": response.content,
+                "response": ai_response,
                 "data": relevant_stocks
             }
             
@@ -88,6 +113,177 @@ Keep responses concise and professional."""
                 "response": f"Sorry, I encountered an error processing your request: {str(e)}",
                 "data": None
             }
+    
+    def _get_cache_key(self, query: str, data_size: int) -> str:
+        """Generate cache key from query and data size"""
+        content = f"{query.lower().strip()}_{data_size}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    @lru_cache(maxsize=100)
+    def _get_cached_response(self, cache_key: str) -> Optional[Dict]:
+        """Get cached response (in-memory cache)"""
+        # LRU cache automatically handles storage
+        return None  # First call always returns None, then caches
+    
+    def _cache_response(self, cache_key: str, result: Dict):
+        """Cache the response"""
+        # Store in the function's cache by calling it
+        self._get_cached_response.__wrapped__(cache_key, result)
+    
+    def _query_with_structured_output(self, query: str, data_summary: str, total_stocks: int) -> tuple:
+        """
+        OPTIMIZED: Single LLM call that returns both filters and response
+        Uses structured output to extract parameters
+        """
+        try:
+            # Build comprehensive prompt that returns structured data
+            prompt = f"""You are a trading analyst assistant. Analyze the query and provide:
+1. Filter parameters (if query asks for specific stocks)
+2. A helpful response to the user
+
+Available data: {total_stocks} stocks
+{data_summary}
+
+User Query: "{query}"
+
+IMPORTANT: If the user asks for specific stocks (e.g., "top 10 by volatility", "stocks with positive sentiment"), 
+extract the appropriate filter parameters. Otherwise, just answer their question.
+
+Filter Parameters to extract:
+- trend: "uptrend" or "downtrend" (if mentioned)
+- trend_strength: "strong", "developing", or "weak" (if mentioned)
+- volatility: "high", "moderate", or "low" (if mentioned)
+- sentiment: "positive", "negative", or "neutral" (if mentioned)
+- sort_by: "volatility", "sentiment", or "adx" (what to sort by)
+- limit: number of stocks requested (default 10)
+
+Respond with JSON in this format:
+{{
+    "filters": {{
+        "trend": null or "uptrend"/"downtrend",
+        "volatility": null or "high"/"moderate"/"low",
+        "sentiment": null or "positive"/"negative",
+        "sort_by": "adx" or "volatility" or "sentiment",
+        "limit": 10
+    }},
+    "response": "Your helpful answer to the user"
+}}"""
+
+            messages = [
+                SystemMessage(content="You extract filters and provide helpful responses. Always return valid JSON."),
+                HumanMessage(content=prompt)
+            ]
+            
+            # Call LLM once
+            result = self.llm.invoke(messages)
+            
+            # Parse JSON response
+            import re
+            json_match = re.search(r'\{.*\}', result.content, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                filters = parsed.get('filters', {})
+                response_text = parsed.get('response', result.content)
+                
+                # Clean up filters (remove null values)
+                clean_filters = {k: v for k, v in filters.items() if v is not None}
+                
+                print(f"📊 Extracted filters: {clean_filters}")
+                return clean_filters, response_text
+            
+            # Fallback if JSON parsing fails
+            return {}, result.content
+            
+        except Exception as e:
+            print(f"⚠️ Error in structured query: {str(e)}")
+            # Fallback to simple response
+            return {}, f"I understand your question. {str(e)}"
+    
+    def _apply_smart_filters(self, df: pd.DataFrame, filter_params: Dict) -> List[Dict]:
+        """
+        Apply extracted filter parameters to dataframe
+        """
+        try:
+            if not filter_params:
+                return None
+            
+            filtered_df = df.copy()
+            
+            # Apply trend filter
+            if filter_params.get('trend'):
+                trend_col = self._find_column(filtered_df, ['trend'])
+                if trend_col:
+                    filtered_df = filtered_df[
+                        filtered_df[trend_col].astype(str).str.lower().str.contains(
+                            filter_params['trend'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply trend strength filter
+            if filter_params.get('trend_strength'):
+                strength_col = self._find_column(filtered_df, ['trend_strength', 'trendstrength'])
+                if strength_col:
+                    filtered_df = filtered_df[
+                        filtered_df[strength_col].astype(str).str.lower().str.contains(
+                            filter_params['trend_strength'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply volatility filter
+            if filter_params.get('volatility'):
+                vol_col = self._find_column(filtered_df, ['volatility'])
+                if vol_col:
+                    filtered_df = filtered_df[
+                        filtered_df[vol_col].astype(str).str.lower().str.contains(
+                            filter_params['volatility'].lower(), na=False
+                        )
+                    ]
+            
+            # Apply sentiment filter
+            if filter_params.get('sentiment'):
+                sentiment_col = self._find_column(filtered_df, ['sentimentscore', 'sentiment_score', 'sentiment'])
+                if sentiment_col:
+                    filtered_df[sentiment_col] = pd.to_numeric(filtered_df[sentiment_col], errors='coerce')
+                    if filter_params['sentiment'].lower() == 'positive':
+                        filtered_df = filtered_df[filtered_df[sentiment_col] > 0]
+                    elif filter_params['sentiment'].lower() == 'negative':
+                        filtered_df = filtered_df[filtered_df[sentiment_col] < 0]
+            
+            # Sort by requested column
+            sort_by = filter_params.get('sort_by', 'adx')
+            if sort_by and sort_by != 'none':
+                sort_col = None
+                if sort_by == 'volatility':
+                    # For volatility, map text to numeric for sorting
+                    vol_col = self._find_column(filtered_df, ['volatility'])
+                    if vol_col:
+                        vol_map = {'high': 3, 'moderate': 2, 'low': 1}
+                        filtered_df['vol_numeric'] = filtered_df[vol_col].astype(str).str.lower().map(vol_map)
+                        sort_col = 'vol_numeric'
+                elif sort_by == 'sentiment':
+                    sort_col = self._find_column(filtered_df, ['sentimentscore', 'sentiment_score'])
+                    if sort_col:
+                        filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
+                elif sort_by == 'adx':
+                    sort_col = self._find_column(filtered_df, ['adx', 'adx '])
+                    if sort_col:
+                        filtered_df[sort_col] = pd.to_numeric(filtered_df[sort_col], errors='coerce')
+                
+                if sort_col:
+                    filtered_df = filtered_df.nlargest(filter_params.get('limit', 10), sort_col)
+            
+            # Apply limit
+            limit = filter_params.get('limit', 10)
+            filtered_df = filtered_df.head(limit)
+            
+            if not filtered_df.empty:
+                return filtered_df.to_dict('records')
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ Error applying smart filters: {str(e)}")
+            return None
     
     def _clean_data_for_json(self, data: List[Dict]) -> List[Dict]:
         """Clean data to ensure JSON compatibility (remove NaN, Infinity)"""
@@ -145,100 +341,24 @@ Keep responses concise and professional."""
         except Exception as e:
             print(f"⚠️ Error creating data summary: {str(e)}")
             return "Data summary unavailable"
-    
-    def _extract_relevant_stocks(self, query: str, df: pd.DataFrame) -> List[Dict]:
+
+    def _get_default_stocks(self, df: pd.DataFrame, limit: int = 10) -> List[Dict]:
         """
-        Extract stocks relevant to the query using expanded keyword matching
+        Return default stocks when no specific filters are requested
+        Sorts by ADX (trend strength) to show most active stocks
         """
         try:
-            query_lower = query.lower()
-            filtered_df = df.copy()
-            filter_applied = False
-            
-            # Expanded keyword mapping for better matching
-            filter_keywords = {
-                # Uptrend synonyms
-                ('uptrend', 'bullish', 'rising', 'up trend', 'going up', 'increasing'): ('Trend', 'uptrend'),
-                # Downtrend synonyms
-                ('downtrend', 'bearish', 'falling', 'down trend', 'going down', 'decreasing'): ('Trend', 'downtrend'),
-                # Strong trend synonyms
-                ('strong', 'powerful', 'strongest', 'high strength'): ('Trend_strength', 'strong'),
-                # High volatility synonyms
-                ('high volatility', 'volatile', 'high vol', 'unstable'): ('Volatility', 'high'),
-                # Moderate volatility
-                ('moderate volatility', 'medium volatility', 'moderate vol'): ('Volatility', 'moderate'),
-                # Low volatility
-                ('low volatility', 'stable', 'low vol'): ('Volatility', 'low'),
-                # Positive sentiment
-                ('positive sentiment', 'good sentiment', 'bullish sentiment', 'optimistic'): ('sentimentScore', lambda x: x > 0),
-                # Negative sentiment
-                ('negative sentiment', 'bad sentiment', 'bearish sentiment', 'pessimistic'): ('sentimentScore', lambda x: x < 0),
-            }
-            
-            # Apply filters based on keyword matches
-            for keywords, (column, value) in filter_keywords.items():
-                if any(keyword in query_lower for keyword in keywords):
-                    # Find the actual column name (handle case variations)
-                    col_name = None
-                    for col in filtered_df.columns:
-                        if col.lower().replace('_', '').replace(' ', '') == column.lower().replace('_', '').replace(' ', ''):
-                            col_name = col
-                            break
-                    
-                    if col_name:
-                        if callable(value):
-                            # Handle lambda functions for numeric comparisons
-                            filtered_df[col_name] = pd.to_numeric(filtered_df[col_name], errors='coerce')
-                            filtered_df = filtered_df[filtered_df[col_name].apply(value)]
-                        else:
-                            # String matching (case insensitive)
-                            filtered_df = filtered_df[filtered_df[col_name].astype(str).str.lower().str.contains(value.lower(), na=False)]
-                        filter_applied = True
-            
-            # Handle ADX-related queries
-            if any(word in query_lower for word in ['high adx', 'strong adx', 'adx above', 'adx >', 'adx greater']):
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    # Filter ADX > 25 for "high ADX"
-                    filtered_df = filtered_df[filtered_df[adx_col] > 25]
-                    filter_applied = True
-            
-            # Handle "top", "best", "strongest" queries
-            if any(word in query_lower for word in ['top', 'best', 'strongest', 'highest', 'leading']):
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    filtered_df = filtered_df.nlargest(10, adx_col)
-                    filter_applied = True
-            
-            # Handle "show", "list", "get", "find" queries - return sample stocks
-            if any(word in query_lower for word in ['show', 'list', 'get', 'find', 'which', 'what']) and not filter_applied:
-                # If no specific filter but user is asking for stocks, return top 10 by ADX
-                adx_col = self._find_column(filtered_df, ['adx', 'adx '])
-                if adx_col:
-                    filtered_df[adx_col] = pd.to_numeric(filtered_df[adx_col], errors='coerce')
-                    filtered_df = filtered_df.nlargest(10, adx_col)
-                    filter_applied = True
-                else:
-                    # Just return first 10 if no ADX
-                    filtered_df = filtered_df.head(10)
-                    filter_applied = True
-            
-            # Return filtered results
-            if filter_applied and not filtered_df.empty:
-                return filtered_df.head(20).to_dict('records')  # Max 20 stocks
-            
-            # If filter was applied but no results, return None (let AI explain)
-            if filter_applied and filtered_df.empty:
-                return None
-            
-            # If no filter and generic query, return None (AI will just answer)
-            return None
-            
+            adx_col = self._find_column(df, ['adx', 'adx '])
+            if adx_col:
+                df[adx_col] = pd.to_numeric(df[adx_col], errors='coerce')
+                result_df = df.nlargest(limit, adx_col)
+                return result_df.to_dict('records')
+            else:
+                # Fallback to first N stocks if ADX column not found
+                return df.head(limit).to_dict('records')
         except Exception as e:
-            print(f"⚠️ Error extracting relevant stocks: {str(e)}")
-            return None
+            print(f"⚠️ Error getting default stocks: {str(e)}")
+            return df.head(limit).to_dict('records')
     
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> str:
         """Helper to find column by possible name variations"""

@@ -1,0 +1,165 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Pineify
+
+//@version=5
+indicator("FC Volume Suite", overlay=false, max_labels_count=500, max_lines_count=500)
+
+//====================
+// Inputs
+//====================
+maLen          = input.int(20,   "Volume MA Length", minval=1)
+maType         = input.string("SMA", "MA Type", options=["SMA","EMA","RMA","WMA"])
+spikeMult      = input.float(2.0, "Spike Threshold × MA", minval=0.1, step=0.1)
+colorMode      = input.string("Price Change", "Bar Color Mode", options=["Price Change","Above/Below MA","Hybrid"], group="Style")
+showMA         = input.bool(true, "Show Volume MA")
+showSpikes     = input.bool(true,  "Mark Volume Spikes")
+
+upCol          = input.color(color.new(color.lime, 0), "Up Color", group="Style")
+dnCol          = input.color(color.new(color.red,  0), "Down Color", group="Style")
+maCol          = input.color(color.new(color.orange, 0), "MA Color", group="Style")
+spikeCol       = input.color(color.new(color.fuchsia, 0), "Spike Marker Color", group="Style")
+
+// --- Highest Up Volume (Daily) ---
+enableHighestUp      = input.bool(true,  "Highlight Highest Up Volume (Daily)")
+highestUpPeriod      = input.int(252,    "Highest Up Volume Lookback (daily bars)", minval=2)
+highestUpColor       = input.color(color.new(color.fuchsia, 0), "Highest Up Volume Color", group="Style")
+paintHighestUpCandle = input.bool(true,  "Paint Candle on Highest Up Day")
+enableHighestUpAlert = input.bool(true,  "Enable Highest Up Volume Alert")
+
+// --- Alert settings ---
+alertEnabled   = input.bool(true,  "Enable Volume Spike Alert")
+alertTiming    = input.string("Once per bar close", "Alert Timing", options=["Once per bar close","Once per bar","All ticks"])
+
+// --- Table styling inputs ---
+tblHeaderBg   = input.color(color.new(color.black, 70), "Table Header BG", group="Table Style")
+tblHeaderText = input.color(color.new(color.white, 0),  "Table Header Text", group="Table Style")
+tblRowBg      = input.color(color.new(color.black, 80), "Table Row BG", group="Table Style")
+tblRowText    = input.color(color.aqua,                 "Table Row Text", group="Table Style")
+tblTextSize   = input.string("Small", "Table Text Size", options=["Tiny","Small","Normal","Large","Huge"], group="Table Style")
+
+sizeFromString(opt) => opt == "Tiny" ? size.tiny : opt == "Small" ? size.small : opt == "Normal" ? size.normal : opt == "Large" ? size.large : size.huge
+
+//====================
+// Moving averages of volume
+//====================
+volMA(src, len, typ) => switch typ
+    "EMA" => ta.ema(src, len)
+    "RMA" => ta.rma(src, len)
+    "WMA" => ta.wma(src, len)
+    =>        ta.sma(src, len)
+
+vma = volMA(volume, maLen,  maType)
+
+//====================
+// Highest Up Volume (daily-based, works on any timeframe)
+//====================
+dOpen  = request.security(syminfo.tickerid, "D", open)
+dClose = request.security(syminfo.tickerid, "D", close)
+dVol   = request.security(syminfo.tickerid, "D", volume)
+upDayD = dClose > dOpen
+upVolD = upDayD ? dVol : 0.0
+maxUpVol = ta.highest(upVolD, highestUpPeriod)
+isHighestUp = enableHighestUp and upDayD and dVol >= maxUpVol and maxUpVol > 0
+
+//====================
+// Column Colors
+//====================
+priceUp = close > close[1]
+above   = volume > vma
+
+col = switch colorMode
+    "Price Change"    => priceUp ? upCol : dnCol
+    "Above/Below MA"  => above   ? upCol : dnCol
+    => // Hybrid: up if priceUp AND above MA, else down
+        (priceUp and above) ? upCol : dnCol
+
+// Final color with volume spike override and Highest-Up-Volume override (takes priority)
+baseCol  = (showSpikes and volume > vma * spikeMult) ? spikeCol : col
+finalCol = isHighestUp ? highestUpColor : baseCol
+
+//====================
+// Plot Volume Columns
+//====================
+plot(volume, title="Volume", style=plot.style_columns, color=finalCol)
+
+//====================
+// Plot MAs on volume
+//====================
+plot(showMA  ? vma  : na, title="Volume MA",  color=maCol,  linewidth=2)
+
+// Paint price candle on Highest Up day (affects main chart candles)
+barcolor(paintHighestUpCandle and isHighestUp ? highestUpColor : na)
+
+//====================
+// Spikes & Alerts
+//====================
+spike = showSpikes and volume > vma * spikeMult
+plotshape(spike, title="Spike", style=shape.triangleup, location=location.bottom, color=spikeCol, size=size.tiny)
+
+// Built-in alert condition (hook for TradingView's Create Alert dialog)
+alertcondition(spike, title="Volume Spike", message="Volume spike: {{ticker}} {{interval}} volume > MA × multiplier")
+
+// Optional programmatic alert firing
+freq = alertTiming == "All ticks" ? alert.freq_all : alertTiming == "Once per bar" ? alert.freq_once_per_bar : alert.freq_once_per_bar_close
+if alertEnabled and spike
+    alert("Volume spike: " + syminfo.ticker + " (" + timeframe.period + ") vol " + str.tostring(volume, format.volume) + " > MA(" + str.tostring(maLen) + ") × " + str.tostring(spikeMult), freq)
+
+// Highest Up Volume alerts
+alertcondition(isHighestUp, title="Highest Up Volume (Daily)", message="Highest Up Volume up-day over last {{input:highestUpPeriod}} daily bars on {{ticker}} {{interval}}")
+if alertEnabled and enableHighestUpAlert and isHighestUp
+    alert("Highest Up Volume (daily) on " + syminfo.ticker + " (" + timeframe.period + ") over last " + str.tostring(highestUpPeriod) + " days", freq)
+    alert("Volume spike: " + syminfo.ticker + " (" + timeframe.period + ") vol " + str.tostring(volume, format.volume) + " > MA(" + str.tostring(maLen) + ") × " + str.tostring(spikeMult), freq)
+
+//====================
+// Relative Volume for last 9 days (table)
+//====================
+daysBack = 9
+var table rvolTable = table.new(position.top_right, 2, daysBack + 1, border_width=1)
+
+// Header
+if barstate.islast
+    table.cell(rvolTable, 0, 0, "Date", text_color=tblHeaderText, text_size=sizeFromString(tblTextSize), bgcolor=tblHeaderBg)
+    table.cell(rvolTable, 1, 0, "RVOL", text_color=tblHeaderText, text_size=sizeFromString(tblTextSize), bgcolor=tblHeaderBg)
+
+// Collect daily volumes and dates
+var float[]  dailyVols  = array.new_float()
+var string[] dailyDates = array.new_string()
+var int currentDay = na
+var float dayVol = 0.0
+var string curDate = ""
+var bool inited = false
+
+newDay2 = ta.change(time("D")) != 0
+
+// Initialize on first bar
+if na(currentDay)
+    currentDay := year * 1000 + month * 50 + dayofmonth
+    curDate    := str.format("{0,date,yyyy-MM-dd}", time)
+    inited     := true
+
+// When a new day starts, push the completed previous day and reset accumulators
+if newDay2
+    if inited
+        array.unshift(dailyVols, dayVol)
+        array.unshift(dailyDates, curDate)
+        if array.size(dailyVols) > daysBack
+            array.pop(dailyVols)
+            array.pop(dailyDates)
+    // reset for the new day
+    dayVol   := volume
+    currentDay := year * 1000 + month * 50 + dayofmonth
+    curDate  := str.format("{0,date,yyyy-MM-dd}", time)
+else
+    dayVol += volume
+
+// Update table with RVOLs
+if barstate.islast
+    avgVol = array.size(dailyVols) > 0 ? array.sum(dailyVols) / array.size(dailyVols) : na
+    for i = 0 to array.size(dailyVols) - 1
+        dVol = array.get(dailyVols, i)
+        dLbl = array.get(dailyDates, i)
+        rel  = na(avgVol) ? na : dVol / avgVol
+        table.cell(rvolTable, 0, i+1, dLbl, text_color=tblRowText, text_size=sizeFromString(tblTextSize), bgcolor=tblRowBg)
+        table.cell(rvolTable, 1, i+1, str.tostring(rel, format.mintick), text_color=tblRowText, text_size=sizeFromString(tblTextSize), bgcolor=tblRowBg)
+
+//====================
