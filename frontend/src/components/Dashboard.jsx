@@ -7,6 +7,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { TrendingUp, TrendingDown, Activity, AlertCircle, Zap } from 'lucide-react';
 import apiService from '../services/api';
 
+import AlertsList from './AlertsList';
+
 const Dashboard = ({ analytics, loading }) => {
   const [insights, setInsights] = useState('');
 
@@ -136,43 +138,51 @@ const Dashboard = ({ analytics, loading }) => {
         </div>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Trend Distribution Pie Chart */}
-        <div className="card">
-          <h3 className="text-lg font-bold mb-4">Trend Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={trendData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {trendData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+      {/* Main Content Grid: Charts + Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Charts (Takes 2/3 width) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Trend Distribution Pie Chart */}
+          <div className="card">
+            <h3 className="text-lg font-bold mb-4">Trend Distribution</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={trendData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {trendData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Top Performers Bar Chart */}
+          <div className="card">
+            <h3 className="text-lg font-bold mb-4">Top Performers (by ADX)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={topPerformersData}>
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="adx" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Top Performers Bar Chart */}
-        <div className="card">
-          <h3 className="text-lg font-bold mb-4">Top Performers (by ADX)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={topPerformersData}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="adx" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        {/* Right Column: Alerts (Takes 1/3 width) */}
+        <div className="lg:col-span-1">
+          <AlertsList />
         </div>
       </div>
 

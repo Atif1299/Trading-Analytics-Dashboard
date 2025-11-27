@@ -67,6 +67,12 @@ export const apiService = {
   getSheets: async () => {
     const response = await api.get('/api/sheets');
     return response.data;
+  },
+
+  // Get TradingView alerts
+  getAlerts: async () => {
+    const response = await api.get('/api/alerts');
+    return response.data;
   }
 };
 
