@@ -300,6 +300,36 @@ async def get_sync_status():
     )
 
 
+@app.get("/api/alerts")
+async def get_alerts():
+    """Get TradingView alerts from Google Sheets"""
+    if not sheets_sync:
+        raise HTTPException(status_code=500, detail="Sheets service not initialized")
+    
+    try:
+        # Get the first sheet ID from env
+        sheet_ids = os.getenv("GOOGLE_SHEET_IDS", "").split(",")
+        if not sheet_ids or not sheet_ids[0]:
+            raise HTTPException(status_code=500, detail="No Google Sheet ID configured")
+            
+        main_sheet_id = sheet_ids[0].strip()
+        
+        # Fetch from TradingView_Alerts sheet
+        # We don't cache alerts as they might be updated frequently by n8n
+        alerts_data = sheets_sync.fetch_sheet_data(
+            main_sheet_id,
+            worksheet_name="TradingView_Alerts"
+        )
+        
+        return {"alerts": alerts_data, "total": len(alerts_data)}
+        
+    except Exception as e:
+        print(f"❌ Error fetching alerts: {str(e)}")
+        # Return empty list instead of erroring out if sheet doesn't exist yet
+        return {"alerts": [], "total": 0, "message": "Could not fetch alerts. Ensure 'TradingView_Alerts' sheet exists."}
+
+
+
 # Run the server
 if __name__ == "__main__":
     import uvicorn

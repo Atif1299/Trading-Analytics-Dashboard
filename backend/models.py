@@ -59,3 +59,19 @@ class SyncStatus(BaseModel):
     total_records: int
     status: str  # 'success', 'error', 'syncing'
     message: Optional[str] = None
+
+
+class Alert(BaseModel):
+    """TradingView Alert from Google Sheets"""
+    symbol: str = Field(..., alias="Symbol")
+    exchange: Optional[str] = Field(None, alias="Exchange")
+    indicator: str = Field(..., alias="Indicator")
+    price: Optional[float] = Field(None, alias="Price")
+    volume: Optional[float] = Field(None, alias="Volumn")  # Note: Handling 'Volumn' typo from sheet
+    timeframe: Optional[str] = Field(None, alias="Timeframe")
+    alert_time: str = Field(..., alias="Alert_Time")
+    status: Optional[str] = Field(None, alias="Status")
+
+    class Config:
+        populate_by_name = True
+
