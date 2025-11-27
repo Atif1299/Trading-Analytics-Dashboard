@@ -84,6 +84,23 @@ const Filters = ({ filters, setFilters, onApply, onReset }) => {
           </select>
         </div>
 
+        {/* Sentiment Filter (Text: neutral, bearish, bullish) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Sentiment
+          </label>
+          <select
+            value={filters.sentiment || ''}
+            onChange={(e) => handleChange('sentiment', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">All</option>
+            <option value="bullish">Bullish</option>
+            <option value="neutral">Neutral</option>
+            <option value="bearish">Bearish</option>
+          </select>
+        </div>
+
         {/* Min Sentiment */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">

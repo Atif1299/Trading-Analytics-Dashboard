@@ -24,6 +24,7 @@ class StockData(BaseModel):
     date: Optional[str] = None
     stock: Optional[str] = None
     sentiment_score: Optional[float] = Field(None, alias="sentimentScore")
+    sentiment: Optional[str] = None  # New field: neutral, bearish, bullish
     rational: Optional[str] = None
 
     class Config:

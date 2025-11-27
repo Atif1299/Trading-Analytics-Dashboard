@@ -194,6 +194,15 @@ class AnalyticsService:
             result[adx_col] = pd.to_numeric(result[adx_col], errors='coerce')
             result = result[result[adx_col] >= filters['min_adx']]
         
+        # Apply sentiment filter (text: neutral, bearish, bullish)
+        if 'sentiment' in filters and filters['sentiment']:
+            sentiment_text_col = 'sentiment' if 'sentiment' in result.columns else None
+            if sentiment_text_col:
+                # Filter out null/empty values first, then match the sentiment
+                result = result[result[sentiment_text_col].notna()]  # Remove null values
+                result = result[result[sentiment_text_col].astype(str).str.strip() != '']  # Remove empty strings
+                result = result[result[sentiment_text_col].astype(str).str.lower() == filters['sentiment'].lower()]
+        
         # Convert to dict and clean NaN/Infinity values
         records = result.to_dict('records')
         return AnalyticsService._clean_data_for_json(records)

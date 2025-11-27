@@ -175,6 +175,7 @@ async def get_stocks(
     trend: Optional[str] = Query(None, description="Filter by trend (uptrend/downtrend)"),
     trend_strength: Optional[str] = Query(None, description="Filter by strength"),
     volatility: Optional[str] = Query(None, description="Filter by volatility"),
+    sentiment: Optional[str] = Query(None, description="Filter by sentiment (bullish/neutral/bearish)"),
     min_sentiment: Optional[float] = Query(None, description="Minimum sentiment score"),
     min_adx: Optional[float] = Query(None, description="Minimum ADX value")
 ):
@@ -200,6 +201,8 @@ async def get_stocks(
         filters['trend_strength'] = trend_strength
     if volatility:
         filters['volatility'] = volatility
+    if sentiment:
+        filters['sentiment'] = sentiment
     if min_sentiment is not None:
         filters['min_sentiment'] = min_sentiment
     if min_adx is not None:
@@ -314,11 +317,12 @@ async def get_alerts():
             
         main_sheet_id = sheet_ids[0].strip()
         
-        # Fetch from TradingView_Alerts sheet
+        # Fetch from TradingView_Alerts sheet (configurable via env)
         # We don't cache alerts as they might be updated frequently by n8n
+        alerts_sheet_name = os.getenv("GOOGLE_ALERTS_SHEET_NAME", "TradingView_Alerts")
         alerts_data = sheets_sync.fetch_sheet_data(
             main_sheet_id,
-            worksheet_name="TradingView_Alerts"
+            worksheet_name=alerts_sheet_name
         )
         
         return {"alerts": alerts_data, "total": len(alerts_data)}
@@ -326,7 +330,8 @@ async def get_alerts():
     except Exception as e:
         print(f"❌ Error fetching alerts: {str(e)}")
         # Return empty list instead of erroring out if sheet doesn't exist yet
-        return {"alerts": [], "total": 0, "message": "Could not fetch alerts. Ensure 'TradingView_Alerts' sheet exists."}
+        alerts_sheet_name = os.getenv("GOOGLE_ALERTS_SHEET_NAME", "TradingView_Alerts")
+        return {"alerts": [], "total": 0, "message": f"Could not fetch alerts. Ensure '{alerts_sheet_name}' sheet exists."}
 
 
 

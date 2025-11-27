@@ -16,6 +16,7 @@ const StockCard = ({ stock }) => {
   const volatility = stock.Volatility || stock.volatility || 'N/A';
   const adx = stock.ADX || stock['ADX '] || stock.adx;
   const sentiment = stock.sentimentScore || stock.sentiment_score;
+  const sentimentText = stock.sentiment;  // New: text sentiment (bullish/bearish/neutral)
 
   return (
     <div className="card hover:scale-[1.02] transition-transform">
@@ -35,11 +36,25 @@ const StockCard = ({ stock }) => {
           </div>
         </div>
         
-        {sentiment !== undefined && sentiment !== null && sentiment !== '' && (
-          <div className={`badge ${parseFloat(sentiment) > 0 ? 'badge-green' : parseFloat(sentiment) < 0 ? 'badge-red' : 'badge-blue'}`}>
-            Sentiment: {parseFloat(sentiment).toFixed(2)}
-          </div>
-        )}
+        <div className="flex gap-2">
+          {/* Sentiment Text Badge (bullish/bearish/neutral) */}
+          {sentimentText && (
+            <div className={`badge ${
+              sentimentText.toLowerCase() === 'bullish' ? 'badge-green' :
+              sentimentText.toLowerCase() === 'bearish' ? 'badge-red' :
+              'badge-blue'
+            }`}>
+              {sentimentText.charAt(0).toUpperCase() + sentimentText.slice(1)}
+            </div>
+          )}
+          
+          {/* Sentiment Score Badge (numeric) */}
+          {sentiment !== undefined && sentiment !== null && sentiment !== '' && (
+            <div className={`badge ${parseFloat(sentiment) > 0 ? 'badge-green' : parseFloat(sentiment) < 0 ? 'badge-red' : 'badge-blue'}`}>
+              Score: {parseFloat(sentiment).toFixed(2)}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Metrics Grid */}
